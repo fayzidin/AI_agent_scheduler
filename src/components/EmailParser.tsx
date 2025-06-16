@@ -1,290 +1,44 @@
-import React, { useState } from 'react';
-import { Mail, Send, Loader2, CheckCircle, AlertCircle, Calendar, Users, Building, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Send, Loader2, CheckCircle, AlertCircle, Calendar, Users, Building, Clock, Zap, Brain } from 'lucide-react';
+import { openaiService, ParsedEmailData, OpenAIParseResponse } from '../services/openaiService';
 import CalendarIntegration from './CalendarIntegration';
 import EventManagement from './EventManagement';
 
-interface ParsedData {
-  contactName: string;
-  email: string;
-  company: string;
-  datetime: string;
-  participants: string[];
-  intent: string;
-}
-
 interface ParseResponse {
   success: boolean;
-  data?: ParsedData;
+  data?: ParsedEmailData;
   error?: string;
+  rawResponse?: string;
 }
 
 const EmailParser: React.FC = () => {
   const [emailText, setEmailText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ParseResponse | null>(null);
+  const [isOpenAIAvailable, setIsOpenAIAvailable] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
 
-  // Enhanced date and time parsing function
-  const parseDateTime = (text: string): string => {
-    // Enhanced date patterns
-    const datePatterns = [
-      // Full dates: January 15th, 2024 | Jan 15, 2024 | 15 January 2024
-      /(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/gi,
-      // Numeric dates: 01/15/2024 | 15/01/2024 | 2024-01-15
-      /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/g,
-      /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g,
-      // Relative dates: tomorrow, next week, next Monday
-      /(tomorrow|next\s+(?:week|monday|tuesday|wednesday|thursday|friday|saturday|sunday))/gi
-    ];
-
-    // Enhanced time patterns
-    const timePatterns = [
-      // 2:00 PM | 14:00 | 2 PM | 2:30 PM
-      /(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)/gi,
-      // 24-hour format: 14:00 | 09:30
-      /(\d{1,2}):(\d{2})/g
-    ];
-
-    let foundDate = '';
-    let foundTime = '';
-
-    // Extract date
-    for (const pattern of datePatterns) {
-      const matches = text.match(pattern);
-      if (matches && matches.length > 0) {
-        foundDate = matches[0];
-        break;
-      }
+  useEffect(() => {
+    // Check if OpenAI is available on component mount
+    setIsOpenAIAvailable(openaiService.isOpenAIAvailable());
+    
+    // Test connection if API key is available
+    if (openaiService.isOpenAIAvailable()) {
+      testOpenAIConnection();
     }
+  }, []);
 
-    // Extract time
-    for (const pattern of timePatterns) {
-      const matches = text.match(pattern);
-      if (matches && matches.length > 0) {
-        foundTime = matches[0];
-        break;
-      }
+  const testOpenAIConnection = async () => {
+    setIsTestingConnection(true);
+    try {
+      const isConnected = await openaiService.testConnection();
+      setIsOpenAIAvailable(isConnected);
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      setIsOpenAIAvailable(false);
+    } finally {
+      setIsTestingConnection(false);
     }
-
-    // Handle relative dates
-    if (foundDate.toLowerCase().includes('tomorrow')) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      foundDate = tomorrow.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-    } else if (foundDate.toLowerCase().includes('next week')) {
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      foundDate = nextWeek.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-    }
-
-    // Combine date and time
-    if (foundDate && foundTime) {
-      return `${foundDate} at ${foundTime}`;
-    } else if (foundDate) {
-      return foundDate;
-    } else if (foundTime) {
-      return `Today at ${foundTime}`;
-    }
-
-    return 'Not specified';
-  };
-
-  // Enhanced contact name extraction
-  const extractContactName = (text: string): string => {
-    // Remove common email prefixes and clean the text
-    const cleanText = text
-      .replace(/^(Hi|Hello|Dear|Hey)\s+/i, '')
-      .replace(/,.*$/s, '') // Remove everything after first comma
-      .replace(/\n.*$/s, '') // Remove everything after first line break
-      .trim();
-
-    // Look for proper names (two capitalized words)
-    const namePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/;
-    const nameMatch = cleanText.match(namePattern);
-    
-    if (nameMatch) {
-      const potentialName = nameMatch[1].trim();
-      
-      // Filter out common words that might be capitalized
-      const commonWords = ['Best', 'Kind', 'Looking', 'Thank', 'Please', 'Hope', 'Regards', 'Sincerely'];
-      const nameWords = potentialName.split(' ');
-      
-      // Check if any word in the name is a common word
-      const hasCommonWord = nameWords.some(word => commonWords.includes(word));
-      
-      if (!hasCommonWord && nameWords.length >= 2) {
-        return potentialName;
-      }
-    }
-
-    // Fallback: look for names after "Hi", "Hello", "Dear"
-    const greetingPattern = /(?:Hi|Hello|Dear)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i;
-    const greetingMatch = text.match(greetingPattern);
-    
-    if (greetingMatch) {
-      return greetingMatch[1].trim();
-    }
-
-    return 'Unknown Contact';
-  };
-
-  // Enhanced company name extraction with precise patterns
-  const extractCompany = (text: string): string => {
-    // Pattern 1: Company names with suffixes (most precise)
-    const companySuffixPattern = /\b([A-Z][a-zA-Z\s&]+?(?:\s+(?:Inc\.|LLC|Corp\.|Corporation|Company|Ltd\.|Limited|Co\.)))\b/g;
-    const suffixMatches = [...text.matchAll(companySuffixPattern)];
-    
-    if (suffixMatches.length > 0) {
-      for (const match of suffixMatches) {
-        const company = match[1].trim();
-        // Make sure it's not part of a longer sentence
-        if (company.split(' ').length <= 4) { // Reasonable company name length
-          return company;
-        }
-      }
-    }
-
-    // Pattern 2: "at [CompanyName]" - very specific extraction
-    const atPattern = /\bat\s+([A-Z][a-zA-Z\s&]{1,30}?)(?:\s+(?:to|for|about|regarding|and|,|\.|$|that|which|who))/gi;
-    const atMatches = [...text.matchAll(atPattern)];
-    
-    for (const match of atMatches) {
-      const company = match[1].trim();
-      
-      // Filter out common non-company phrases
-      const excludeWords = ['the team', 'the office', 'the meeting', 'the same', 'the time', 'your convenience', 'your office'];
-      const isExcluded = excludeWords.some(phrase => company.toLowerCase().includes(phrase));
-      
-      if (!isExcluded && company.length > 2 && company.length < 40 && /^[A-Z]/.test(company)) {
-        return company;
-      }
-    }
-
-    // Pattern 3: "from [CompanyName]" - specific extraction
-    const fromPattern = /\bfrom\s+([A-Z][a-zA-Z\s&]{1,30}?)(?:\s+(?:to|for|about|regarding|and|,|\.|$|that|which|who))/gi;
-    const fromMatches = [...text.matchAll(fromPattern)];
-    
-    for (const match of fromMatches) {
-      const company = match[1].trim();
-      
-      // Filter out common non-company phrases
-      const excludeWords = ['the team', 'the office', 'the meeting', 'what', 'where', 'when'];
-      const isExcluded = excludeWords.some(phrase => company.toLowerCase().includes(phrase));
-      
-      if (!isExcluded && company.length > 2 && company.length < 40 && /^[A-Z]/.test(company)) {
-        return company;
-      }
-    }
-
-    // Pattern 4: "with [CompanyName]" - specific extraction
-    const withPattern = /\bwith\s+(?:the\s+team\s+at\s+)?([A-Z][a-zA-Z\s&]{1,30}?)(?:\s+(?:to|for|about|regarding|and|,|\.|$|that|which|who))/gi;
-    const withMatches = [...text.matchAll(withPattern)];
-    
-    for (const match of withMatches) {
-      const company = match[1].trim();
-      
-      // Filter out personal references
-      const excludeWords = ['you', 'me', 'us', 'them', 'the team', 'everyone', 'all'];
-      const isExcluded = excludeWords.some(phrase => company.toLowerCase().includes(phrase));
-      
-      if (!isExcluded && company.length > 2 && company.length < 40 && /^[A-Z]/.test(company)) {
-        return company;
-      }
-    }
-
-    // Pattern 5: Well-known company names (standalone)
-    const knownCompanies = [
-      'Microsoft', 'Google', 'Apple', 'Amazon', 'Meta', 'Tesla', 'Netflix', 'Spotify',
-      'Salesforce', 'Oracle', 'IBM', 'Intel', 'Adobe', 'Zoom', 'Slack', 'Dropbox',
-      'TechCorp', 'DataSoft', 'CloudTech', 'InnovateLab', 'DigitalWorks'
-    ];
-    
-    for (const company of knownCompanies) {
-      const regex = new RegExp(`\\b${company}(?:\\s+(?:Inc\\.|Corp\\.|Corporation|Company|Ltd\\.|Limited))?\\b`, 'i');
-      const match = text.match(regex);
-      if (match) {
-        return match[0];
-      }
-    }
-
-    // Pattern 6: Standalone capitalized words that look like companies (2-3 words max)
-    const standalonePattern = /\b([A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]{2,}){0,2})\b/g;
-    const standaloneMatches = [...text.matchAll(standalonePattern)];
-    
-    for (const match of standaloneMatches) {
-      const company = match[1].trim();
-      
-      // Exclude common words that aren't companies
-      const excludeWords = [
-        'Hi', 'Hello', 'Dear', 'Best', 'Kind', 'Looking', 'Thank', 'Please', 'Hope', 
-        'Regards', 'Sincerely', 'Would', 'Could', 'Should', 'Meeting', 'Project',
-        'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
-        'September', 'October', 'November', 'December', 'Monday', 'Tuesday', 
-        'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
-      ];
-      
-      const isExcluded = excludeWords.some(word => company.toLowerCase().includes(word.toLowerCase()));
-      
-      if (!isExcluded && company.length > 3 && company.length < 30) {
-        // Check if it appears in a company-like context
-        const companyContext = new RegExp(`(?:at|from|with|company|corp|inc)\\s+${company}|${company}\\s+(?:inc|corp|company|team|office)`, 'i');
-        if (companyContext.test(text)) {
-          return company;
-        }
-      }
-    }
-
-    return 'Unknown Company';
-  };
-
-  // Mock AI parsing function - simulates API call
-  const parseEmailWithAI = async (text: string): Promise<ParsedData> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Enhanced email extraction
-    const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
-    const emails = text.match(emailRegex) || [];
-    
-    // Enhanced date and time parsing
-    const datetime = parseDateTime(text);
-    
-    // Enhanced company extraction
-    const company = extractCompany(text);
-    
-    // Enhanced name extraction
-    const contactName = extractContactName(text);
-    
-    // Enhanced intent detection with better keyword matching
-    let intent = 'general';
-    const lowerText = text.toLowerCase();
-    
-    if (lowerText.includes('reschedule') || lowerText.includes('move the meeting') || 
-        lowerText.includes('change the time') || lowerText.includes('postpone')) {
-      intent = 'reschedule_meeting';
-    } else if (lowerText.includes('cancel') || lowerText.includes('call off') || 
-               lowerText.includes('cancel the meeting')) {
-      intent = 'cancel_meeting';
-    } else if (lowerText.includes('meeting') || lowerText.includes('schedule') || 
-               lowerText.includes('appointment') || lowerText.includes('call')) {
-      intent = 'schedule_meeting';
-    }
-    
-    return {
-      contactName: contactName,
-      email: emails[0] || 'no-email@example.com',
-      company: company,
-      datetime: datetime,
-      participants: emails.slice(0, 3),
-      intent: intent
-    };
   };
 
   const handleParseEmail = async () => {
@@ -297,8 +51,8 @@ const EmailParser: React.FC = () => {
     setResult(null);
 
     try {
-      const parsedData = await parseEmailWithAI(emailText);
-      setResult({ success: true, data: parsedData });
+      const response: OpenAIParseResponse = await openaiService.parseEmail(emailText);
+      setResult(response);
     } catch (error) {
       console.error('Parse error:', error);
       setResult({ 
@@ -340,14 +94,45 @@ const EmailParser: React.FC = () => {
     }
   };
 
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 0.8) return 'text-green-300 bg-green-500/10';
+    if (confidence >= 0.6) return 'text-yellow-300 bg-yellow-500/10';
+    return 'text-red-300 bg-red-500/10';
+  };
+
   return (
     <div className="space-y-8">
       <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20">
-        <div className="flex items-center mb-8">
-          <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl mr-4">
-            <Mail className="w-8 h-8 text-white" />
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center">
+            <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl mr-4">
+              <Mail className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-bold text-white">AI Email Parser</h2>
+              <p className="text-indigo-200 mt-1">Powered by OpenAI GPT-4</p>
+            </div>
           </div>
-          <h2 className="text-3xl font-bold text-white">Email Parser</h2>
+
+          {/* AI Status Indicator */}
+          <div className="flex items-center space-x-3">
+            {isTestingConnection ? (
+              <div className="flex items-center space-x-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
+                <span className="text-yellow-300 text-sm">Testing...</span>
+              </div>
+            ) : isOpenAIAvailable ? (
+              <div className="flex items-center space-x-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <Brain className="w-4 h-4 text-green-400" />
+                <span className="text-green-300 text-sm">AI Ready</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 px-3 py-2 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                <Zap className="w-4 h-4 text-orange-400" />
+                <span className="text-orange-300 text-sm">Fallback Mode</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-8">
@@ -385,12 +170,16 @@ Hi Sarah, I'm sorry but I need to cancel our meeting scheduled for Friday, Janua
             {isLoading ? (
               <>
                 <Loader2 className="w-6 h-6 animate-spin" />
-                <span className="text-lg">Analyzing Email...</span>
+                <span className="text-lg">
+                  {isOpenAIAvailable ? 'Analyzing with AI...' : 'Processing...'}
+                </span>
               </>
             ) : (
               <>
-                <Send className="w-6 h-6" />
-                <span className="text-lg">Parse with AI</span>
+                {isOpenAIAvailable ? <Brain className="w-6 h-6" /> : <Zap className="w-6 h-6" />}
+                <span className="text-lg">
+                  {isOpenAIAvailable ? 'Parse with AI' : 'Parse Email'}
+                </span>
               </>
             )}
           </button>
@@ -402,16 +191,30 @@ Hi Sarah, I'm sorry but I need to cancel our meeting scheduled for Friday, Janua
                 <>
                   {/* Success Header */}
                   <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-2xl p-6">
-                    <div className="flex items-center">
-                      <CheckCircle className="w-8 h-8 text-green-400 mr-4" />
-                      <div>
-                        <h3 className="text-2xl font-bold text-green-300 mb-2">
-                          Email Parsed Successfully
-                        </h3>
-                        <p className="text-green-200">
-                          AI has extracted the following meeting information from your email
-                        </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <CheckCircle className="w-8 h-8 text-green-400 mr-4" />
+                        <div>
+                          <h3 className="text-2xl font-bold text-green-300 mb-2">
+                            Email Parsed Successfully
+                          </h3>
+                          <p className="text-green-200">
+                            {isOpenAIAvailable ? 'AI has extracted' : 'System has extracted'} the following meeting information
+                          </p>
+                        </div>
                       </div>
+                      
+                      {/* Confidence Score */}
+                      {result.data?.confidence && (
+                        <div className={`px-4 py-2 rounded-xl border ${getConfidenceColor(result.data.confidence)}`}>
+                          <div className="text-center">
+                            <div className="text-lg font-bold">
+                              {Math.round(result.data.confidence * 100)}%
+                            </div>
+                            <div className="text-xs opacity-80">Confidence</div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -492,6 +295,17 @@ Hi Sarah, I'm sorry but I need to cancel our meeting scheduled for Friday, Janua
                           </div>
                         </div>
                       </div>
+
+                      {/* AI Reasoning (if available) */}
+                      {result.data.reasoning && isOpenAIAvailable && (
+                        <div className="mt-6 bg-blue-500/10 rounded-xl p-4 border border-blue-500/20">
+                          <div className="flex items-center mb-2">
+                            <Brain className="w-4 h-4 text-blue-400 mr-2" />
+                            <span className="text-sm font-semibold text-blue-300">AI Analysis</span>
+                          </div>
+                          <p className="text-blue-200 text-sm">{result.data.reasoning}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -506,6 +320,11 @@ Hi Sarah, I'm sorry but I need to cancel our meeting scheduled for Friday, Janua
                       <p className="text-red-200">
                         {result.error || 'An unknown error occurred while parsing the email'}
                       </p>
+                      {!isOpenAIAvailable && (
+                        <p className="text-red-200 text-sm mt-2">
+                          💡 Tip: Add your OpenAI API key to environment variables for better accuracy
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
