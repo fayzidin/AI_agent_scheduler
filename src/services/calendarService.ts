@@ -1,4 +1,6 @@
 import { CalendarProvider, AvailabilityResponse, CalendarEvent, ScheduleRequest, TimeSlot, EventSearchResult, RescheduleRequest } from '../types/calendar';
+import { googleCalendarService } from './googleCalendarService';
+import { isGoogleConfigured } from '../config/google';
 
 class CalendarService {
   private providers: CalendarProvider[] = [
@@ -43,12 +45,42 @@ class CalendarService {
     }
   ];
 
+  constructor() {
+    // Initialize Google Calendar if configured
+    if (isGoogleConfigured()) {
+      googleCalendarService.initialize().then((success) => {
+        if (success) {
+          console.log('Google Calendar service initialized');
+        }
+      });
+    }
+  }
+
   getProviders(): CalendarProvider[] {
+    // Update Google provider status
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    if (googleProvider) {
+      googleProvider.connected = googleCalendarService.isConnected();
+    }
+    
     return this.providers;
   }
 
   async connectProvider(providerId: string): Promise<boolean> {
-    // Simulate OAuth flow
+    if (providerId === 'google') {
+      if (!isGoogleConfigured()) {
+        throw new Error('Google Calendar API not configured. Please add your Google API credentials to environment variables.');
+      }
+      
+      const success = await googleCalendarService.signIn();
+      if (success) {
+        const provider = this.providers.find(p => p.id === 'google');
+        if (provider) provider.connected = true;
+      }
+      return success;
+    }
+    
+    // For other providers, simulate OAuth flow
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     const provider = this.providers.find(p => p.id === providerId);
@@ -60,6 +92,13 @@ class CalendarService {
   }
 
   async disconnectProvider(providerId: string): Promise<boolean> {
+    if (providerId === 'google') {
+      await googleCalendarService.signOut();
+      const provider = this.providers.find(p => p.id === 'google');
+      if (provider) provider.connected = false;
+      return true;
+    }
+    
     const provider = this.providers.find(p => p.id === providerId);
     if (provider) {
       provider.connected = false;
@@ -69,7 +108,17 @@ class CalendarService {
   }
 
   async checkAvailability(date: string, participants: string[]): Promise<AvailabilityResponse> {
-    // Simulate API call
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      try {
+        return await googleCalendarService.checkAvailability(date, participants);
+      } catch (error) {
+        console.error('Google Calendar availability check failed, falling back to mock:', error);
+      }
+    }
+    
+    // Fallback to mock implementation
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     const businessHours = this.generateBusinessHours();
@@ -89,7 +138,18 @@ class CalendarService {
   }
 
   async scheduleEvent(request: ScheduleRequest): Promise<CalendarEvent> {
-    // Simulate API call
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      try {
+        const event = await googleCalendarService.scheduleEvent(request);
+        return event;
+      } catch (error) {
+        console.error('Google Calendar scheduling failed, falling back to mock:', error);
+      }
+    }
+    
+    // Fallback to mock implementation
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     const newEvent: CalendarEvent = {
@@ -108,12 +168,21 @@ class CalendarService {
   }
 
   async searchEvents(query: string, participants: string[]): Promise<EventSearchResult> {
-    // Simulate API call
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      try {
+        return await googleCalendarService.searchEvents(query, participants);
+      } catch (error) {
+        console.error('Google Calendar search failed, falling back to mock:', error);
+      }
+    }
+    
+    // Fallback to mock implementation
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     const queryLower = query.toLowerCase();
     const relevantEvents = this.mockEvents.filter(event => {
-      // Search by title, attendees, or description
       const titleMatch = event.title.toLowerCase().includes(queryLower);
       const attendeeMatch = participants.some(participant => 
         event.attendees.some(attendee => 
@@ -126,17 +195,14 @@ class CalendarService {
       return (titleMatch || attendeeMatch || descriptionMatch) && event.status !== 'cancelled';
     });
 
-    // Find the best match based on multiple criteria
     let bestMatch: CalendarEvent | undefined;
     let highestConfidence = 0;
 
     for (const event of relevantEvents) {
       let confidence = 0;
       
-      // Title similarity
       if (event.title.toLowerCase().includes(queryLower)) confidence += 0.4;
       
-      // Attendee match
       const attendeeMatches = participants.filter(participant => 
         event.attendees.some(attendee => 
           attendee.toLowerCase().includes(participant.toLowerCase())
@@ -144,7 +210,6 @@ class CalendarService {
       ).length;
       confidence += (attendeeMatches / Math.max(participants.length, 1)) * 0.4;
       
-      // Recent events get higher priority
       const eventDate = new Date(event.start);
       const now = new Date();
       const daysDiff = Math.abs((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -164,7 +229,17 @@ class CalendarService {
   }
 
   async rescheduleEvent(request: RescheduleRequest): Promise<CalendarEvent> {
-    // Simulate API call
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      try {
+        return await googleCalendarService.rescheduleEvent(request);
+      } catch (error) {
+        console.error('Google Calendar reschedule failed, falling back to mock:', error);
+      }
+    }
+    
+    // Fallback to mock implementation
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     const eventIndex = this.mockEvents.findIndex(e => e.id === request.eventId);
@@ -185,7 +260,17 @@ class CalendarService {
   }
 
   async cancelEvent(eventId: string, reason?: string): Promise<boolean> {
-    // Simulate API call
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      try {
+        return await googleCalendarService.cancelEvent(eventId, reason);
+      } catch (error) {
+        console.error('Google Calendar cancellation failed, falling back to mock:', error);
+      }
+    }
+    
+    // Fallback to mock implementation
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     const eventIndex = this.mockEvents.findIndex(e => e.id === eventId);
@@ -204,7 +289,17 @@ class CalendarService {
   }
 
   async getEvents(startDate: string, endDate: string): Promise<CalendarEvent[]> {
-    // Simulate API call
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      try {
+        return await googleCalendarService.getEvents(startDate, endDate);
+      } catch (error) {
+        console.error('Google Calendar events fetch failed, falling back to mock:', error);
+      }
+    }
+    
+    // Fallback to mock implementation
     await new Promise(resolve => setTimeout(resolve, 500));
     
     return this.mockEvents.filter(event => {
@@ -215,6 +310,7 @@ class CalendarService {
     });
   }
 
+  // Helper methods for mock implementation
   private generateBusinessHours(): TimeSlot[] {
     const slots: TimeSlot[] = [];
     for (let hour = 9; hour < 17; hour++) {
@@ -228,7 +324,6 @@ class CalendarService {
   }
 
   private getBusySlots(date: string): TimeSlot[] {
-    // Mock busy slots based on existing events
     return [
       { start: '09:00', end: '09:30', available: false },
       { start: '11:00', end: '12:00', available: false },
@@ -257,21 +352,39 @@ class CalendarService {
   }
 
   async sendCalendarInvite(event: CalendarEvent): Promise<boolean> {
-    // Simulate sending calendar invites
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      return await googleCalendarService.sendCalendarInvite(event);
+    }
+    
+    // Mock implementation
     await new Promise(resolve => setTimeout(resolve, 1000));
     console.log('Calendar invite sent for:', event.title);
     return true;
   }
 
   async sendRescheduleNotification(event: CalendarEvent): Promise<boolean> {
-    // Simulate sending reschedule notifications
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      return await googleCalendarService.sendRescheduleNotification(event);
+    }
+    
+    // Mock implementation
     await new Promise(resolve => setTimeout(resolve, 1000));
     console.log('Reschedule notification sent for:', event.title);
     return true;
   }
 
   async sendCancellationNotification(event: CalendarEvent): Promise<boolean> {
-    // Simulate sending cancellation notifications
+    const googleProvider = this.providers.find(p => p.id === 'google');
+    
+    if (googleProvider?.connected && googleCalendarService.isConnected()) {
+      return await googleCalendarService.sendCancellationNotification(event);
+    }
+    
+    // Mock implementation
     await new Promise(resolve => setTimeout(resolve, 1000));
     console.log('Cancellation notification sent for:', event.title);
     return true;

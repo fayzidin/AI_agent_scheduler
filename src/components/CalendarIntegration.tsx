@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap } from 'lucide-react';
 import { calendarService } from '../services/calendarService';
 import { CalendarProvider, AvailabilityResponse, CalendarEvent } from '../types/calendar';
+import { isGoogleConfigured } from '../config/google';
 import CRMIntegration from './CRMIntegration';
 
 interface CalendarIntegrationProps {
@@ -27,6 +28,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [meetingDuration, setMeetingDuration] = useState(60);
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [connectionError, setConnectionError] = useState<string>('');
 
   useEffect(() => {
     setProviders(calendarService.getProviders());
@@ -49,13 +51,23 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
 
   const handleConnectProvider = async (providerId: string) => {
     setIsConnecting(providerId);
+    setConnectionError('');
+    
     try {
       const success = await calendarService.connectProvider(providerId);
       if (success) {
         setProviders(calendarService.getProviders());
+        
+        // Auto-check availability after successful connection
+        if (parsedData.intent === 'schedule_meeting' && selectedDate) {
+          setTimeout(() => handleCheckAvailability(selectedDate), 1000);
+        }
+      } else {
+        setConnectionError('Failed to connect to calendar provider');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to connect provider:', error);
+      setConnectionError(error.message || 'Failed to connect to calendar provider');
     } finally {
       setIsConnecting(null);
     }
@@ -65,6 +77,8 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
     try {
       await calendarService.disconnectProvider(providerId);
       setProviders(calendarService.getProviders());
+      setAvailability(null);
+      setScheduledEvent(null);
     } catch (error) {
       console.error('Failed to disconnect provider:', error);
     }
@@ -209,6 +223,13 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
     });
   };
 
+  const getProviderStatus = (provider: CalendarProvider) => {
+    if (provider.id === 'google' && !isGoogleConfigured()) {
+      return { status: 'not_configured', message: 'API not configured' };
+    }
+    return { status: provider.connected ? 'connected' : 'disconnected', message: provider.connected ? 'Connected' : 'Not connected' };
+  };
+
   if (parsedData.intent !== 'schedule_meeting') {
     return null;
   }
@@ -259,49 +280,104 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
           </h4>
           
           <div className="grid md:grid-cols-3 gap-4">
-            {providers.map((provider) => (
-              <div
-                key={provider.id}
-                className={`p-4 rounded-xl border transition-all duration-200 ${
-                  provider.connected
-                    ? 'bg-green-500/10 border-green-500/30'
-                    : 'bg-white/10 border-white/20'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <span className="text-2xl mr-3">{provider.icon}</span>
-                    <div>
-                      <p className="text-white font-semibold">{provider.name}</p>
-                      <p className={`text-sm ${provider.connected ? 'text-green-300' : 'text-slate-400'}`}>
-                        {provider.connected ? 'Connected' : 'Not connected'}
-                      </p>
+            {providers.map((provider) => {
+              const providerStatus = getProviderStatus(provider);
+              
+              return (
+                <div
+                  key={provider.id}
+                  className={`p-4 rounded-xl border transition-all duration-200 ${
+                    providerStatus.status === 'connected'
+                      ? 'bg-green-500/10 border-green-500/30'
+                      : providerStatus.status === 'not_configured'
+                      ? 'bg-orange-500/10 border-orange-500/30'
+                      : 'bg-white/10 border-white/20'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <span className="text-2xl mr-3">{provider.icon}</span>
+                      <div>
+                        <p className="text-white font-semibold">{provider.name}</p>
+                        <p className={`text-sm ${
+                          providerStatus.status === 'connected' ? 'text-green-300' : 
+                          providerStatus.status === 'not_configured' ? 'text-orange-300' : 
+                          'text-slate-400'
+                        }`}>
+                          {providerStatus.message}
+                        </p>
+                      </div>
                     </div>
+                    
+                    {providerStatus.status === 'not_configured' ? (
+                      <div className="flex items-center space-x-1">
+                        <Settings className="w-4 h-4 text-orange-400" />
+                        <span className="text-xs text-orange-300">Setup Required</span>
+                      </div>
+                    ) : providerStatus.status === 'connected' ? (
+                      <button
+                        onClick={() => handleDisconnectProvider(provider.id)}
+                        className="px-3 py-1 bg-red-500/20 text-red-300 rounded-lg text-sm hover:bg-red-500/30 transition-all duration-200"
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleConnectProvider(provider.id)}
+                        disabled={isConnecting === provider.id}
+                        className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-lg text-sm hover:bg-blue-500/30 transition-all duration-200 disabled:opacity-50 flex items-center space-x-1"
+                      >
+                        {isConnecting === provider.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : null}
+                        <span>Connect</span>
+                      </button>
+                    )}
                   </div>
-                  
-                  {provider.connected ? (
-                    <button
-                      onClick={() => handleDisconnectProvider(provider.id)}
-                      className="px-3 py-1 bg-red-500/20 text-red-300 rounded-lg text-sm hover:bg-red-500/30 transition-all duration-200"
-                    >
-                      Disconnect
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleConnectProvider(provider.id)}
-                      disabled={isConnecting === provider.id}
-                      className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-lg text-sm hover:bg-blue-500/30 transition-all duration-200 disabled:opacity-50 flex items-center space-x-1"
-                    >
-                      {isConnecting === provider.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : null}
-                      <span>Connect</span>
-                    </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Connection Error */}
+          {connectionError && (
+            <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-400 mr-3" />
+                <div>
+                  <p className="text-red-300 font-semibold">Connection Failed</p>
+                  <p className="text-red-200 text-sm">{connectionError}</p>
+                  {connectionError.includes('not configured') && (
+                    <p className="text-red-200 text-sm mt-1">
+                      Please check the GOOGLE_CALENDAR_SETUP.md file for setup instructions.
+                    </p>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {/* Setup Instructions */}
+          {!isGoogleConfigured() && (
+            <div className="mt-4 bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+              <div className="flex items-center mb-3">
+                <Settings className="w-5 h-5 text-orange-400 mr-3" />
+                <h5 className="text-orange-300 font-semibold">Google Calendar Setup Required</h5>
+              </div>
+              <p className="text-orange-200 text-sm mb-3">
+                To use real Google Calendar integration, you need to configure your API credentials.
+              </p>
+              <div className="text-orange-200 text-sm space-y-1">
+                <p>1. Get Google Calendar API credentials from Google Cloud Console</p>
+                <p>2. Add them to your .env file:</p>
+                <div className="bg-black/20 rounded p-2 mt-2 font-mono text-xs">
+                  VITE_GOOGLE_CLIENT_ID=your-client-id<br/>
+                  VITE_GOOGLE_API_KEY=your-api-key
+                </div>
+                <p className="mt-2">3. Check GOOGLE_CALENDAR_SETUP.md for detailed instructions</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Availability Check */}
@@ -447,6 +523,26 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                 </h4>
                 <p className="text-yellow-200">
                   To check availability and schedule meetings automatically, please connect at least one calendar provider above.
+                </p>
+                {!isGoogleConfigured() && (
+                  <p className="text-yellow-200 text-sm mt-2">
+                    💡 Tip: Configure Google Calendar API for real calendar integration, or use mock mode for testing.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fallback Mode Indicator */}
+        {!isGoogleConfigured() && (
+          <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+            <div className="flex items-center">
+              <Zap className="w-5 h-5 text-blue-400 mr-3" />
+              <div>
+                <h5 className="text-blue-300 font-semibold">Fallback Mode Active</h5>
+                <p className="text-blue-200 text-sm">
+                  Using mock calendar data for demonstration. Connect real calendar providers for production use.
                 </p>
               </div>
             </div>
