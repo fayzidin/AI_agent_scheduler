@@ -38,7 +38,7 @@ const Header: React.FC = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
-            {/* Bolt.new Badge */}
+            {/* Bolt.new Badge - Enhanced visibility */}
             <a
               href="https://bolt.new/"
               target="_blank"
@@ -46,11 +46,13 @@ const Header: React.FC = () => {
               className="group relative flex items-center justify-center"
               title="Powered by Bolt.new"
             >
-              <div className="relative w-14 h-14 lg:w-16 lg:h-16 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
+              <div className="relative w-16 h-16 lg:w-18 lg:h-18 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
+                {/* Background circle for better visibility */}
+                <div className="absolute inset-0 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-2xl"></div>
                 <img
                   src="/white_circle_360x360.svg"
                   alt="Powered by Bolt.new"
-                  className="w-full h-full object-contain drop-shadow-lg filter brightness-100 contrast-100"
+                  className="relative w-full h-full object-contain p-1 filter drop-shadow-lg"
                   onError={(e) => {
                     // Fallback to a simple text badge if image fails
                     const target = e.target as HTMLImageElement;
@@ -58,17 +60,19 @@ const Header: React.FC = () => {
                     const parent = target.parentElement;
                     if (parent) {
                       parent.innerHTML = `
-                        <div class="w-14 h-14 lg:w-16 lg:h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
+                        <div class="w-16 h-16 lg:w-18 lg:h-18 bg-white rounded-full flex items-center justify-center shadow-2xl border border-gray-200">
                           <span class="text-black font-bold text-xs text-center leading-tight">BOLT<br/>.NEW</span>
                         </div>
                       `;
                     }
                   }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-600/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>
+                {/* Glow effect on hover */}
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/30 to-purple-500/30 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-md"></div>
               </div>
-              <div className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                <div className="bg-black/90 text-white text-xs px-3 py-1 rounded-lg whitespace-nowrap shadow-lg">
+              {/* Tooltip */}
+              <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
+                <div className="bg-black/90 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap shadow-xl border border-white/10">
                   Powered by Bolt.new
                   <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-2 h-2 bg-black/90 rotate-45"></div>
                 </div>
@@ -134,7 +138,7 @@ const Header: React.FC = () => {
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center space-x-3">
-            {/* Mobile Bolt.new Badge */}
+            {/* Mobile Bolt.new Badge - Enhanced visibility */}
             <a
               href="https://bolt.new/"
               target="_blank"
@@ -142,11 +146,13 @@ const Header: React.FC = () => {
               className="group relative flex items-center justify-center"
               title="Powered by Bolt.new"
             >
-              <div className="relative w-10 h-10 transition-transform duration-300 group-hover:scale-110">
+              <div className="relative w-12 h-12 transition-transform duration-300 group-hover:scale-110">
+                {/* Background circle for better visibility */}
+                <div className="absolute inset-0 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-xl"></div>
                 <img
                   src="/white_circle_360x360.svg"
                   alt="Powered by Bolt.new"
-                  className="w-full h-full object-contain drop-shadow-lg"
+                  className="relative w-full h-full object-contain p-1 filter drop-shadow-lg"
                   onError={(e) => {
                     // Fallback to a simple text badge if image fails
                     const target = e.target as HTMLImageElement;
@@ -154,7 +160,7 @@ const Header: React.FC = () => {
                     const parent = target.parentElement;
                     if (parent) {
                       parent.innerHTML = `
-                        <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
+                        <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl border border-gray-200">
                           <span class="text-black font-bold text-xs text-center leading-tight">BOLT<br/>.NEW</span>
                         </div>
                       `;
