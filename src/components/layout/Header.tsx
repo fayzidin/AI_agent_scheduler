@@ -38,11 +38,11 @@ const Header: React.FC = () => {
               <Brain className="w-6 h-6 text-white" />
               
               {/* AIMA Logo */}
-              <div className="w-10 h-10 flex items-center justify-center">
+              <div className="w-12 h-10 flex items-center justify-center">
                 <img
                   src="/AIMA_logo.svg"
                   alt="AIMA"
-                  className="w-24 h-20 object-contain filter brightness-0 invert"
+                  className="w-20 h-16 object-contain filter brightness-0 invert"
                   onError={(e) => {
                     // Fallback to text if SVG fails to load
                     const target = e.target as HTMLImageElement;
