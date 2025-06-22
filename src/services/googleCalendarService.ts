@@ -1,5 +1,6 @@
 import { CalendarProvider, AvailabilityResponse, CalendarEvent, ScheduleRequest, EventSearchResult, RescheduleRequest } from '../types/calendar';
 import { getGoogleConfig, isGoogleConfigured } from '../config/google';
+import * as Sentry from '@sentry/react';
 
 declare global {
   interface Window {
@@ -21,6 +22,12 @@ class GoogleCalendarService {
     }
 
     try {
+      Sentry.addBreadcrumb({
+        message: 'Starting Google Calendar initialization',
+        category: 'calendar',
+        level: 'info',
+      });
+
       // Load Google API script and Google Identity Services
       await Promise.all([
         this.loadGoogleAPI(),
@@ -30,8 +37,15 @@ class GoogleCalendarService {
       const config = getGoogleConfig();
       
       // Initialize gapi client (without auth2)
-      await new Promise((resolve) => {
-        window.gapi.load('client', resolve);
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Google API client initialization timeout'));
+        }, 10000);
+
+        window.gapi.load('client', () => {
+          clearTimeout(timeout);
+          resolve(undefined);
+        });
       });
 
       // Initialize the client (without clientId and scope - these are handled by GIS)
@@ -47,19 +61,36 @@ class GoogleCalendarService {
         client_id: config.clientId,
         scope: config.scopes.join(' '),
         callback: (tokenResponse: any) => {
-          if (tokenResponse.error) {
-            console.error('Token acquisition failed:', tokenResponse.error);
-            this.isSignedIn = false;
-            return;
+          try {
+            if (tokenResponse.error) {
+              console.error('Token acquisition failed:', tokenResponse.error);
+              Sentry.captureException(new Error(`Token acquisition failed: ${tokenResponse.error}`), {
+                tags: { component: 'google-calendar-auth' },
+                extra: { error: tokenResponse.error },
+              });
+              this.isSignedIn = false;
+              return;
+            }
+            
+            // Set the access token for gapi client
+            this.gapi.client.setToken({
+              access_token: tokenResponse.access_token
+            });
+            
+            this.isSignedIn = true;
+            console.log('Google Calendar access token acquired successfully');
+            
+            Sentry.addBreadcrumb({
+              message: 'Google Calendar token acquired successfully',
+              category: 'calendar',
+              level: 'info',
+            });
+          } catch (error) {
+            console.error('Error in token callback:', error);
+            Sentry.captureException(error, {
+              tags: { component: 'google-calendar-token-callback' },
+            });
           }
-          
-          // Set the access token for gapi client
-          this.gapi.client.setToken({
-            access_token: tokenResponse.access_token
-          });
-          
-          this.isSignedIn = true;
-          console.log('Google Calendar access token acquired successfully');
         }
       });
 
@@ -70,9 +101,21 @@ class GoogleCalendarService {
       this.isSignedIn = existingToken && existingToken.access_token;
       
       console.log('Google Calendar API initialized successfully with GIS');
+      
+      Sentry.addBreadcrumb({
+        message: 'Google Calendar API initialized successfully',
+        category: 'calendar',
+        level: 'info',
+        data: { hasExistingToken: !!existingToken },
+      });
+      
       return true;
     } catch (error) {
       console.error('Failed to initialize Google Calendar API:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-init' },
+        extra: { isConfigured: isGoogleConfigured() },
+      });
       return false;
     }
   }
@@ -84,10 +127,20 @@ class GoogleCalendarService {
         return;
       }
 
+      const timeout = setTimeout(() => {
+        reject(new Error('Google API script load timeout'));
+      }, 10000);
+
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Google API'));
+      script.onload = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('Failed to load Google API'));
+      };
       document.head.appendChild(script);
     });
   }
@@ -99,10 +152,20 @@ class GoogleCalendarService {
         return;
       }
 
+      const timeout = setTimeout(() => {
+        reject(new Error('Google Identity Services script load timeout'));
+      }, 10000);
+
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+      script.onload = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('Failed to load Google Identity Services'));
+      };
       document.head.appendChild(script);
     });
   }
@@ -114,37 +177,67 @@ class GoogleCalendarService {
     }
 
     return new Promise((resolve) => {
-      if (!this.tokenClient) {
-        console.error('Token client not initialized');
-        resolve(false);
-        return;
-      }
-
-      // Store the original callback
-      const originalCallback = this.tokenClient.callback;
-      
-      // Override callback to handle the promise resolution
-      this.tokenClient.callback = (tokenResponse: any) => {
-        // Call original callback first
-        originalCallback(tokenResponse);
-        
-        // Resolve the promise based on success/failure
-        if (tokenResponse.error) {
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-        
-        // Restore original callback
-        this.tokenClient.callback = originalCallback;
-      };
-
       try {
+        if (!this.tokenClient) {
+          console.error('Token client not initialized');
+          Sentry.captureMessage('Token client not initialized', {
+            level: 'error',
+            tags: { component: 'google-calendar-signin' },
+          });
+          resolve(false);
+          return;
+        }
+
+        Sentry.addBreadcrumb({
+          message: 'Starting Google Calendar sign-in',
+          category: 'calendar',
+          level: 'info',
+        });
+
+        // Store the original callback
+        const originalCallback = this.tokenClient.callback;
+        
+        // Override callback to handle the promise resolution
+        this.tokenClient.callback = (tokenResponse: any) => {
+          try {
+            // Call original callback first
+            originalCallback(tokenResponse);
+            
+            // Resolve the promise based on success/failure
+            if (tokenResponse.error) {
+              Sentry.captureException(new Error(`Sign-in failed: ${tokenResponse.error}`), {
+                tags: { component: 'google-calendar-signin' },
+                extra: { error: tokenResponse.error },
+              });
+              resolve(false);
+            } else {
+              Sentry.addBreadcrumb({
+                message: 'Google Calendar sign-in successful',
+                category: 'calendar',
+                level: 'info',
+              });
+              resolve(true);
+            }
+            
+            // Restore original callback
+            this.tokenClient.callback = originalCallback;
+          } catch (error) {
+            console.error('Error in sign-in callback:', error);
+            Sentry.captureException(error, {
+              tags: { component: 'google-calendar-signin-callback' },
+            });
+            this.tokenClient.callback = originalCallback;
+            resolve(false);
+          }
+        };
+
         // Request access token
         this.tokenClient.requestAccessToken();
       } catch (error) {
         console.error('Failed to request access token:', error);
-        this.tokenClient.callback = originalCallback;
+        Sentry.captureException(error, {
+          tags: { component: 'google-calendar-signin' },
+        });
         resolve(false);
       }
     });
@@ -154,6 +247,12 @@ class GoogleCalendarService {
     if (!this.isInitialized) return;
 
     try {
+      Sentry.addBreadcrumb({
+        message: 'Starting Google Calendar sign-out',
+        category: 'calendar',
+        level: 'info',
+      });
+
       const token = this.gapi.client.getToken();
       if (token && token.access_token) {
         // Revoke the access token
@@ -167,6 +266,9 @@ class GoogleCalendarService {
       console.log('Google Calendar signed out successfully');
     } catch (error) {
       console.error('Google sign-out failed:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-signout' },
+      });
     }
   }
 
@@ -184,6 +286,13 @@ class GoogleCalendarService {
     }
 
     try {
+      Sentry.addBreadcrumb({
+        message: 'Checking calendar availability',
+        category: 'calendar',
+        level: 'info',
+        data: { date, participantCount: participants.length },
+      });
+
       const startDate = new Date(date);
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 1);
@@ -208,6 +317,10 @@ class GoogleCalendarService {
       };
     } catch (error) {
       console.error('Failed to check availability:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-availability' },
+        extra: { date, participantCount: participants.length },
+      });
       throw new Error('Failed to check calendar availability');
     }
   }
@@ -218,6 +331,13 @@ class GoogleCalendarService {
     }
 
     try {
+      Sentry.addBreadcrumb({
+        message: 'Scheduling calendar event',
+        category: 'calendar',
+        level: 'info',
+        data: { title: request.title, attendeeCount: request.attendees.length },
+      });
+
       const event = {
         summary: request.title,
         description: request.description,
@@ -248,6 +368,13 @@ class GoogleCalendarService {
 
       const createdEvent = response.result;
       
+      Sentry.addBreadcrumb({
+        message: 'Calendar event scheduled successfully',
+        category: 'calendar',
+        level: 'info',
+        data: { eventId: createdEvent.id },
+      });
+      
       return {
         id: createdEvent.id,
         title: createdEvent.summary,
@@ -260,6 +387,10 @@ class GoogleCalendarService {
       };
     } catch (error) {
       console.error('Failed to create event:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-schedule' },
+        extra: { title: request.title, attendeeCount: request.attendees.length },
+      });
       throw new Error('Failed to schedule meeting');
     }
   }
@@ -270,6 +401,13 @@ class GoogleCalendarService {
     }
 
     try {
+      Sentry.addBreadcrumb({
+        message: 'Searching calendar events',
+        category: 'calendar',
+        level: 'info',
+        data: { query, participantCount: participants.length },
+      });
+
       // Search for events in the past 30 days and next 30 days
       const now = new Date();
       const pastDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -339,6 +477,10 @@ class GoogleCalendarService {
       };
     } catch (error) {
       console.error('Failed to search events:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-search' },
+        extra: { query, participantCount: participants.length },
+      });
       throw new Error('Failed to search calendar events');
     }
   }
@@ -349,6 +491,13 @@ class GoogleCalendarService {
     }
 
     try {
+      Sentry.addBreadcrumb({
+        message: 'Rescheduling calendar event',
+        category: 'calendar',
+        level: 'info',
+        data: { eventId: request.eventId },
+      });
+
       // Get the existing event
       const eventResponse = await this.gapi.client.calendar.events.get({
         calendarId: 'primary',
@@ -392,6 +541,10 @@ class GoogleCalendarService {
       };
     } catch (error) {
       console.error('Failed to reschedule event:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-reschedule' },
+        extra: { eventId: request.eventId },
+      });
       throw new Error('Failed to reschedule meeting');
     }
   }
@@ -402,6 +555,13 @@ class GoogleCalendarService {
     }
 
     try {
+      Sentry.addBreadcrumb({
+        message: 'Cancelling calendar event',
+        category: 'calendar',
+        level: 'info',
+        data: { eventId },
+      });
+
       // Get the existing event to update description
       const eventResponse = await this.gapi.client.calendar.events.get({
         calendarId: 'primary',
@@ -427,6 +587,10 @@ class GoogleCalendarService {
       return true;
     } catch (error) {
       console.error('Failed to cancel event:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-cancel' },
+        extra: { eventId },
+      });
       return false;
     }
   }
@@ -462,6 +626,10 @@ class GoogleCalendarService {
         }));
     } catch (error) {
       console.error('Failed to get events:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-events' },
+        extra: { startDate, endDate },
+      });
       throw new Error('Failed to retrieve calendar events');
     }
   }

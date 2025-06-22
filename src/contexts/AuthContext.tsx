@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/react';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
 import type { Database } from '../config/supabase';
 
@@ -39,33 +40,95 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isConfigured] = useState(isSupabaseConfigured());
 
   useEffect(() => {
-    if (!isConfigured) {
-      setLoading(false);
-      return;
-    }
+    const initializeAuth = async () => {
+      try {
+        Sentry.addBreadcrumb({
+          message: 'Starting auth initialization',
+          category: 'auth',
+          level: 'info',
+        });
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
+        if (!isConfigured) {
+          Sentry.captureMessage('Supabase not configured', 'warning');
+          setLoading(false);
+          return;
+        }
+
+        // Get initial session with timeout
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session fetch timeout')), 10000)
+        );
+
+        const { data: { session }, error } = await Promise.race([
+          sessionPromise,
+          timeoutPromise
+        ]) as any;
+
+        if (error) {
+          throw error;
+        }
+
+        Sentry.addBreadcrumb({
+          message: `Session retrieved: ${session ? 'found' : 'none'}`,
+          category: 'auth',
+          level: 'info',
+        });
+
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        } else {
+          setLoading(false);
+        }
+
+      } catch (error) {
+        console.error('Auth initialization failed:', error);
+        Sentry.captureException(error, {
+          tags: { component: 'auth-initialization' },
+          extra: { isConfigured },
+        });
         setLoading(false);
       }
-    });
+    };
 
-    // Listen for auth changes
+    initializeAuth();
+
+    // Listen for auth changes with error handling
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        await loadProfile(session.user.id);
-      } else {
-        setProfile(null);
+      try {
+        Sentry.addBreadcrumb({
+          message: `Auth state changed: ${event}`,
+          category: 'auth',
+          level: 'info',
+        });
+
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Set user context for Sentry
+          Sentry.setUser({
+            id: session.user.id,
+            email: session.user.email,
+          });
+          
+          await loadProfile(session.user.id);
+        } else {
+          Sentry.setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Auth state change error:', error);
+        Sentry.captureException(error, {
+          tags: { component: 'auth-state-change' },
+          extra: { event, hasSession: !!session },
+        });
         setLoading(false);
       }
     });
@@ -75,19 +138,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const loadProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      Sentry.addBreadcrumb({
+        message: 'Loading user profile',
+        category: 'profile',
+        level: 'info',
+        data: { userId },
+      });
+
+      const profilePromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 8000)
+      );
+
+      const { data, error } = await Promise.race([
+        profilePromise,
+        timeoutPromise
+      ]) as any;
+
       if (error && error.code !== 'PGRST116') {
-        console.error('Error loading profile:', error);
+        throw error;
       } else if (data) {
         setProfile(data);
+        Sentry.setContext('user_profile', {
+          company: data.company,
+          onboarding_completed: data.onboarding_completed,
+          subscription_tier: data.subscription_tier,
+        });
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'profile-loading' },
+        extra: { userId },
+      });
     } finally {
       setLoading(false);
     }
@@ -95,65 +183,128 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signUp = async (email: string, password: string, fullName?: string) => {
     if (!isConfigured) {
-      return { error: new Error('Supabase not configured') as AuthError };
+      const error = new Error('Supabase not configured') as AuthError;
+      Sentry.captureException(error, { tags: { component: 'signup' } });
+      return { error };
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    try {
+      Sentry.addBreadcrumb({
+        message: 'Starting user signup',
+        category: 'auth',
+        level: 'info',
+        data: { email, hasFullName: !!fullName },
+      });
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    });
+      });
 
-    if (!error && data.user) {
-      // Create profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: fullName || null,
-          onboarding_completed: false,
-          subscription_tier: 'free',
-        });
+      if (!error && data.user) {
+        // Create profile
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: data.user.email!,
+            full_name: fullName || null,
+            onboarding_completed: false,
+            subscription_tier: 'free',
+          });
 
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
+        if (profileError) {
+          console.error('Error creating profile:', profileError);
+          Sentry.captureException(profileError, {
+            tags: { component: 'profile-creation' },
+            extra: { userId: data.user.id },
+          });
+        }
       }
-    }
 
-    return { error };
+      if (error) {
+        Sentry.captureException(error, { tags: { component: 'signup' } });
+      }
+
+      return { error };
+    } catch (error) {
+      const authError = error as AuthError;
+      Sentry.captureException(authError, { tags: { component: 'signup' } });
+      return { error: authError };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
     if (!isConfigured) {
-      return { error: new Error('Supabase not configured') as AuthError };
+      const error = new Error('Supabase not configured') as AuthError;
+      Sentry.captureException(error, { tags: { component: 'signin' } });
+      return { error };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      Sentry.addBreadcrumb({
+        message: 'Starting user signin',
+        category: 'auth',
+        level: 'info',
+        data: { email },
+      });
 
-    return { error };
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        Sentry.captureException(error, { tags: { component: 'signin' } });
+      }
+
+      return { error };
+    } catch (error) {
+      const authError = error as AuthError;
+      Sentry.captureException(authError, { tags: { component: 'signin' } });
+      return { error: authError };
+    }
   };
 
   const signOut = async () => {
     if (!isConfigured) return;
     
-    await supabase.auth.signOut();
-    setProfile(null);
+    try {
+      Sentry.addBreadcrumb({
+        message: 'User signing out',
+        category: 'auth',
+        level: 'info',
+      });
+
+      await supabase.auth.signOut();
+      setProfile(null);
+      Sentry.setUser(null);
+    } catch (error) {
+      console.error('Sign out error:', error);
+      Sentry.captureException(error, { tags: { component: 'signout' } });
+    }
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!isConfigured || !user) {
-      return { error: new Error('Not authenticated') };
+      const error = new Error('Not authenticated');
+      Sentry.captureException(error, { tags: { component: 'profile-update' } });
+      return { error };
     }
 
     try {
+      Sentry.addBreadcrumb({
+        message: 'Updating user profile',
+        category: 'profile',
+        level: 'info',
+        data: { updates: Object.keys(updates) },
+      });
+
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -163,7 +314,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .eq('id', user.id);
 
       if (error) {
-        return { error };
+        throw error;
       }
 
       // Update local profile state
@@ -173,6 +324,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       return { error: null };
     } catch (error) {
+      Sentry.captureException(error, {
+        tags: { component: 'profile-update' },
+        extra: { userId: user.id, updates },
+      });
       return { error: error as Error };
     }
   };
