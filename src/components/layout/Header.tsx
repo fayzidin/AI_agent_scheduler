@@ -30,11 +30,36 @@ const Header: React.FC = () => {
     <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
+          {/* Combined Logo */}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <Brain className="w-6 h-6 text-white" />
+            {/* Combined Logo Container */}
+            <div className="flex items-center space-x-2">
+              {/* AIMA Logo */}
+              <div className="w-10 h-10 flex items-center justify-center">
+                <img
+                  src="/AIMA_logo.svg"
+                  alt="AIMA"
+                  className="w-8 h-8 object-contain filter invert brightness-0 contrast-100"
+                  style={{ filter: 'invert(1) brightness(2)' }}
+                  onError={(e) => {
+                    // Fallback to text if SVG fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = '<span class="text-white font-bold text-lg">AI</span>';
+                    }
+                  }}
+                />
+              </div>
+              
+              {/* Brain Icon */}
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <Brain className="w-6 h-6 text-white" />
+              </div>
             </div>
+            
+            {/* Project Title */}
             <div>
               <h1 className="text-white font-bold text-xl">AI Meeting Assistant</h1>
               <p className="text-indigo-200 text-xs">Powered by OpenAI</p>
