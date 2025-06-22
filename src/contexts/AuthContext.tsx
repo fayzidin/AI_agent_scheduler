@@ -149,10 +149,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 8000)
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 15000)
       );
 
       const { data, error } = await Promise.race([
@@ -160,7 +160,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         timeoutPromise
       ]) as any;
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         throw error;
       } else if (data) {
         setProfile(data);
