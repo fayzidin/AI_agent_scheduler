@@ -11,13 +11,16 @@ import {
   Send, 
   Brain,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Shield,
+  Settings
 } from 'lucide-react';
 import { gmailService } from '../services/gmailService';
 import { openaiService } from '../services/openaiService';
 import { calendarService } from '../services/calendarService';
 import { EmailMessage } from '../types/email';
 import { useAuth } from '../contexts/AuthContext';
+import { isGmailConfigured } from '../config/gmail';
 import CalendarIntegration from './CalendarIntegration';
 
 const GmailRoom: React.FC = () => {
@@ -56,28 +59,43 @@ const GmailRoom: React.FC = () => {
     setConnectionError('');
     
     try {
-      console.log('🔗 Connecting to Gmail...');
-      console.log('📧 Attempting silent authentication first (no popup)...');
+      console.log('🔗 Starting Gmail connection process...');
+      console.log('📧 Step 1: Checking API configuration...');
       
+      if (!isGmailConfigured()) {
+        console.log('⚠️ Gmail API not configured - using mock mode');
+      } else {
+        console.log('✅ Gmail API configured - using real Gmail');
+      }
+      
+      console.log('📧 Step 2: Attempting authentication...');
       const success = await gmailService.signIn();
+      
       if (success) {
+        console.log('✅ Step 3: Gmail connection successful!');
         setIsConnected(true);
-        console.log('✅ Successfully connected to Gmail!');
         
         // Fetch emails immediately after connection
+        console.log('📧 Step 4: Fetching emails...');
         await fetchEmails();
       } else {
-        throw new Error('Failed to connect to Gmail');
+        throw new Error('Gmail authentication returned false');
       }
     } catch (error: any) {
-      console.error('Gmail connection failed:', error);
+      console.error('❌ Gmail connection failed:', error);
       
-      let errorMessage = error.message || 'Failed to connect to Gmail';
+      let errorMessage = 'Failed to connect to Gmail';
       
       if (error.message?.includes('redirect_uri_mismatch')) {
-        errorMessage = 'OAuth configuration error. Please check GOOGLE_OAUTH_SETUP.md for instructions.';
+        errorMessage = 'OAuth configuration error. Please check GOOGLE_OAUTH_SETUP.md for instructions on configuring your Google Cloud Console.';
       } else if (error.message?.includes('not configured')) {
         errorMessage = 'Gmail API not configured. Please add your Google API credentials to environment variables.';
+      } else if (error.message?.includes('popup_blocked')) {
+        errorMessage = 'Popup blocked. Please allow popups for this site and try again.';
+      } else if (error.message?.includes('access_denied')) {
+        errorMessage = 'Access denied. Please grant permission to access your Gmail account.';
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
       setConnectionError(errorMessage);
@@ -88,21 +106,22 @@ const GmailRoom: React.FC = () => {
 
   const handleDisconnect = async () => {
     try {
+      console.log('🚪 Disconnecting from Gmail...');
       await gmailService.signOut();
       setIsConnected(false);
       setMessages([]);
       setSelectedMessage(null);
       setParsedData(null);
-      console.log('📧 Disconnected from Gmail');
+      console.log('✅ Disconnected from Gmail successfully');
     } catch (error) {
-      console.error('Failed to disconnect Gmail:', error);
+      console.error('❌ Failed to disconnect Gmail:', error);
     }
   };
 
   const fetchEmails = async () => {
     setIsLoading(true);
     try {
-      console.log('📧 Fetching recent 10 emails from Gmail...');
+      console.log('📧 Fetching recent emails from Gmail...');
       
       // Fetch recent 10 emails (unread first)
       const recentEmails = await gmailService.getMessages({ isRead: false }, 10);
@@ -118,11 +137,13 @@ const GmailRoom: React.FC = () => {
       );
       
       if (meetingEmail) {
+        console.log(`🎯 Auto-selecting email with meeting intent: "${meetingEmail.subject}"`);
         setSelectedMessage(meetingEmail);
         await parseEmailWithAI(meetingEmail);
       }
     } catch (error) {
-      console.error('Failed to fetch Gmail messages:', error);
+      console.error('❌ Failed to fetch Gmail messages:', error);
+      setConnectionError('Failed to fetch emails. Please try reconnecting.');
     } finally {
       setIsLoading(false);
     }
@@ -140,19 +161,25 @@ const GmailRoom: React.FC = () => {
       if (parseResponse.success && parseResponse.data) {
         setParsedData(parseResponse.data);
         console.log(`✅ AI parsing completed with ${Math.round(parseResponse.data.confidence * 100)}% confidence`);
+        console.log(`🎯 Detected intent: ${parseResponse.data.intent}`);
         
         // Mark as read after successful parsing
-        await gmailService.markAsRead(message.id);
-        
-        // Update message state
-        setMessages(prev => prev.map(m => 
-          m.id === message.id ? { ...m, isRead: true } : m
-        ));
+        try {
+          await gmailService.markAsRead(message.id);
+          console.log('✅ Marked email as read');
+          
+          // Update message state
+          setMessages(prev => prev.map(m => 
+            m.id === message.id ? { ...m, isRead: true } : m
+          ));
+        } catch (error) {
+          console.warn('⚠️ Failed to mark email as read:', error);
+        }
       } else {
         console.log('❌ AI parsing failed or no meeting intent detected');
       }
     } catch (error) {
-      console.error('Failed to parse email with AI:', error);
+      console.error('❌ Failed to parse email with AI:', error);
     } finally {
       setIsParsing(false);
     }
@@ -169,7 +196,7 @@ const GmailRoom: React.FC = () => {
       // which handles the actual scheduling logic
       
     } catch (error) {
-      console.error('Failed to schedule meeting:', error);
+      console.error('❌ Failed to schedule meeting:', error);
     } finally {
       setIsScheduling(false);
     }
@@ -259,6 +286,51 @@ const GmailRoom: React.FC = () => {
           </div>
         </div>
 
+        {/* API Configuration Status */}
+        <div className="mb-6">
+          {isGmailConfigured() ? (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+              <div className="flex items-center">
+                <Shield className="w-5 h-5 text-green-400 mr-3" />
+                <div>
+                  <h5 className="text-green-300 font-semibold">Gmail API Configured</h5>
+                  <p className="text-green-200 text-sm">
+                    Real Gmail integration is active. You'll connect to your actual Gmail account.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+              <div className="flex items-center">
+                <Settings className="w-5 h-5 text-blue-400 mr-3" />
+                <div>
+                  <h5 className="text-blue-300 font-semibold">Mock Mode Active</h5>
+                  <p className="text-blue-200 text-sm">
+                    Gmail API not configured. Using sample emails for demonstration. 
+                    Add your Google API credentials to connect to real Gmail.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* User Authentication Status */}
+        {user && (
+          <div className="mb-6 bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+            <div className="flex items-center">
+              <Shield className="w-5 h-5 text-green-400 mr-3" />
+              <div>
+                <h5 className="text-green-300 font-semibold">Signed In</h5>
+                <p className="text-green-200 text-sm">
+                  You're signed in as {user.email}. Gmail connection will be linked to your account.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Connection Error */}
         {connectionError && (
           <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
@@ -267,6 +339,17 @@ const GmailRoom: React.FC = () => {
               <div>
                 <p className="text-red-300 font-semibold">Connection Failed</p>
                 <p className="text-red-200 text-sm">{connectionError}</p>
+                {connectionError.includes('OAuth configuration') && (
+                  <div className="mt-3 text-red-200 text-sm">
+                    <p className="font-semibold">Quick Fix:</p>
+                    <ol className="list-decimal list-inside space-y-1 mt-1">
+                      <li>Go to Google Cloud Console → APIs & Services → Credentials</li>
+                      <li>Edit your OAuth 2.0 Client ID</li>
+                      <li>Add this domain to Authorized JavaScript origins: <code className="bg-red-500/20 px-1 rounded">{window.location.origin}</code></li>
+                      <li>Save and wait 5-10 minutes</li>
+                    </ol>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -311,6 +394,9 @@ const GmailRoom: React.FC = () => {
                   <div className="text-center">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-4" />
                     <p className="text-white">Fetching emails from Gmail...</p>
+                    <p className="text-indigo-200 text-sm mt-2">
+                      {isGmailConfigured() ? 'Using real Gmail API' : 'Using mock data'}
+                    </p>
                   </div>
                 </div>
               ) : messages.length === 0 ? (
@@ -318,7 +404,9 @@ const GmailRoom: React.FC = () => {
                   <div className="text-center">
                     <Mail className="w-12 h-12 text-indigo-400 mx-auto mb-4" />
                     <p className="text-white text-lg">No emails found</p>
-                    <p className="text-indigo-200">Try refreshing or check your Gmail account</p>
+                    <p className="text-indigo-200">
+                      {isGmailConfigured() ? 'Try refreshing or check your Gmail account' : 'Mock data will appear here'}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -327,6 +415,7 @@ const GmailRoom: React.FC = () => {
                     <div
                       key={message.id}
                       onClick={() => {
+                        console.log(`📧 Selected email: "${message.subject}"`);
                         setSelectedMessage(message);
                         parseEmailWithAI(message);
                       }}

@@ -110,11 +110,13 @@ Team Lead`
 
   async initialize(): Promise<boolean> {
     if (!isGmailConfigured()) {
-      console.warn('Gmail API not configured');
-      return false;
+      console.warn('Gmail API not configured - using mock data');
+      return true; // Return true to allow mock mode
     }
 
     try {
+      console.log('🔧 Initializing Gmail API...');
+      
       Sentry.addBreadcrumb({
         message: 'Starting Gmail API initialization',
         category: 'gmail',
@@ -153,9 +155,7 @@ Team Lead`
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
         scope: config.scopes.join(' '),
-        callback: (tokenResponse: any) => {
-          this.handleTokenResponse(tokenResponse);
-        },
+        callback: '', // Will be set dynamically
         error_callback: (error: any) => {
           console.error('Gmail OAuth error:', error);
           Sentry.captureException(new Error(`Gmail OAuth error: ${JSON.stringify(error)}`), {
@@ -176,7 +176,7 @@ Team Lead`
         this.loadStoredToken();
       }
       
-      console.log('Gmail API initialized successfully');
+      console.log('✅ Gmail API initialized successfully');
       
       Sentry.addBreadcrumb({
         message: 'Gmail API initialized successfully',
@@ -190,7 +190,7 @@ Team Lead`
       
       return true;
     } catch (error) {
-      console.error('Failed to initialize Gmail API:', error);
+      console.error('❌ Failed to initialize Gmail API:', error);
       Sentry.captureException(error, {
         tags: { component: 'gmail-init' },
         extra: { 
@@ -206,11 +206,11 @@ Team Lead`
   private handleTokenResponse(tokenResponse: any) {
     try {
       if (tokenResponse.error) {
-        console.error('Gmail token acquisition failed:', tokenResponse.error);
+        console.error('❌ Gmail token acquisition failed:', tokenResponse.error);
         
         let errorMessage = `Token acquisition failed: ${tokenResponse.error}`;
         if (tokenResponse.error === 'redirect_uri_mismatch') {
-          errorMessage = `OAuth configuration error: The current domain (${window.location.origin}) is not authorized in Google Cloud Console.`;
+          errorMessage = `OAuth configuration error: The current domain (${window.location.origin}) is not authorized in Google Cloud Console. Please add this domain to your OAuth client's authorized JavaScript origins.`;
         }
         
         Sentry.captureException(new Error(errorMessage), {
@@ -231,7 +231,7 @@ Team Lead`
       });
       
       this.isSignedIn = true;
-      console.log('Gmail access token acquired successfully');
+      console.log('✅ Gmail access token acquired successfully');
       
       Sentry.addBreadcrumb({
         message: 'Gmail token acquired successfully',
@@ -243,7 +243,7 @@ Team Lead`
       this.storeTokenInfo(tokenResponse);
       
     } catch (error) {
-      console.error('Error in Gmail token callback:', error);
+      console.error('❌ Error in Gmail token callback:', error);
       Sentry.captureException(error, {
         tags: { component: 'gmail-token-callback' },
       });
@@ -258,15 +258,16 @@ Team Lead`
     };
     
     try {
-      sessionStorage.setItem('gmail_token', JSON.stringify(tokenInfo));
+      localStorage.setItem('gmail_token', JSON.stringify(tokenInfo));
+      console.log('💾 Gmail token stored successfully');
     } catch (error) {
-      console.warn('Failed to store Gmail token info:', error);
+      console.warn('⚠️ Failed to store Gmail token info:', error);
     }
   }
 
   private loadStoredToken(): boolean {
     try {
-      const storedToken = sessionStorage.getItem('gmail_token');
+      const storedToken = localStorage.getItem('gmail_token');
       if (!storedToken) return false;
 
       const tokenInfo = JSON.parse(storedToken);
@@ -277,15 +278,16 @@ Team Lead`
           access_token: tokenInfo.access_token
         });
         this.isSignedIn = true;
-        console.log('Restored Gmail session from storage');
+        console.log('🔄 Restored Gmail session from storage');
         return true;
       } else {
-        sessionStorage.removeItem('gmail_token');
+        localStorage.removeItem('gmail_token');
+        console.log('🗑️ Removed expired Gmail token');
         return false;
       }
     } catch (error) {
-      console.warn('Failed to load stored Gmail token:', error);
-      sessionStorage.removeItem('gmail_token');
+      console.warn('⚠️ Failed to load stored Gmail token:', error);
+      localStorage.removeItem('gmail_token');
       return false;
     }
   }
@@ -341,70 +343,90 @@ Team Lead`
   }
 
   async signIn(): Promise<boolean> {
+    console.log('🔐 Starting Gmail sign-in process...');
+    
+    if (!isGmailConfigured()) {
+      console.log('⚠️ Gmail API not configured - using mock mode');
+      this.isSignedIn = true; // Allow mock mode
+      return true;
+    }
+
     if (!this.isInitialized) {
+      console.log('🔧 Initializing Gmail API first...');
       const initialized = await this.initialize();
-      if (!initialized) return false;
+      if (!initialized) {
+        throw new Error('Failed to initialize Gmail API');
+      }
     }
 
     // First, try to restore from stored session
+    console.log('🔍 Checking for stored token...');
     if (this.loadStoredToken()) {
+      console.log('✅ Using stored Gmail token');
       return true;
     }
 
     // Try silent authentication first
+    console.log('🤫 Attempting silent authentication...');
     const silentSuccess = await this.attemptSilentAuth();
     if (silentSuccess) {
+      console.log('✅ Silent Gmail authentication successful');
       return true;
     }
 
     // If silent auth fails, fall back to interactive auth
-    return this.attemptInteractiveAuth();
+    console.log('👤 Falling back to interactive authentication...');
+    const interactiveSuccess = await this.attemptInteractiveAuth();
+    if (interactiveSuccess) {
+      console.log('✅ Interactive Gmail authentication successful');
+      return true;
+    }
+
+    throw new Error('Gmail authentication failed');
   }
 
   private async attemptSilentAuth(): Promise<boolean> {
     return new Promise((resolve) => {
       try {
         if (!this.tokenClient) {
+          console.log('❌ Token client not available for silent auth');
           resolve(false);
           return;
         }
 
-        console.log('Attempting silent Gmail authentication...');
+        console.log('🤫 Attempting silent Gmail authentication...');
 
-        const originalCallback = this.tokenClient.callback;
-        
+        // Set up callback for this specific request
         this.tokenClient.callback = (tokenResponse: any) => {
           try {
-            originalCallback(tokenResponse);
+            this.handleTokenResponse(tokenResponse);
             
             if (tokenResponse.error) {
-              console.log('Silent Gmail auth failed:', tokenResponse.error);
+              console.log('❌ Silent auth failed:', tokenResponse.error);
               resolve(false);
             } else {
-              console.log('Silent Gmail auth successful!');
+              console.log('✅ Silent auth successful!');
               resolve(true);
             }
-            
-            this.tokenClient.callback = originalCallback;
           } catch (error) {
-            console.error('Error in silent Gmail auth callback:', error);
-            this.tokenClient.callback = originalCallback;
+            console.error('❌ Error in silent auth callback:', error);
             resolve(false);
           }
         };
 
-        this.tokenClient.requestAccessToken({ prompt: 'none' });
+        // Request access token silently (no user interaction)
+        this.tokenClient.requestAccessToken({ 
+          prompt: 'none' // This is the key - no user prompt
+        });
 
+        // Set a timeout for silent auth
         setTimeout(() => {
-          if (this.tokenClient.callback !== originalCallback) {
-            console.log('Silent Gmail auth timeout');
-            this.tokenClient.callback = originalCallback;
-            resolve(false);
-          }
+          console.log('⏰ Silent auth timeout');
+          resolve(false);
         }, 5000);
 
       } catch (error) {
-        console.error('Silent Gmail auth attempt failed:', error);
+        console.error('❌ Silent auth attempt failed:', error);
         resolve(false);
       }
     });
@@ -414,62 +436,95 @@ Team Lead`
     return new Promise((resolve) => {
       try {
         if (!this.tokenClient) {
-          console.error('Token client not initialized for Gmail interactive auth');
+          console.error('❌ Token client not available for interactive auth');
           resolve(false);
           return;
         }
 
-        console.log('Attempting interactive Gmail authentication...');
+        console.log('👤 Attempting interactive Gmail authentication...');
 
-        const originalCallback = this.tokenClient.callback;
-        
+        // Set up callback for this specific request
         this.tokenClient.callback = (tokenResponse: any) => {
           try {
-            originalCallback(tokenResponse);
+            this.handleTokenResponse(tokenResponse);
             
             if (tokenResponse.error) {
-              console.error('Interactive Gmail auth failed:', tokenResponse.error);
+              console.error('❌ Interactive auth failed:', tokenResponse.error);
+              
+              // Provide helpful error messages
+              if (tokenResponse.error === 'redirect_uri_mismatch') {
+                console.error(`
+🚨 OAuth Configuration Error:
+
+The current domain (${window.location.origin}) is not authorized in your Google Cloud Console.
+
+To fix this:
+1. Go to https://console.cloud.google.com/
+2. Navigate to APIs & Services → Credentials
+3. Edit your OAuth 2.0 Client ID
+4. Add this URL to "Authorized JavaScript origins":
+   ${window.location.origin}
+5. Save and wait 5-10 minutes for changes to propagate
+
+See GOOGLE_OAUTH_SETUP.md for detailed instructions.
+                `);
+              }
+              
               resolve(false);
             } else {
-              console.log('Interactive Gmail auth successful!');
+              console.log('✅ Interactive auth successful!');
               resolve(true);
             }
-            
-            this.tokenClient.callback = originalCallback;
           } catch (error) {
-            console.error('Error in interactive Gmail auth callback:', error);
-            this.tokenClient.callback = originalCallback;
+            console.error('❌ Error in interactive auth callback:', error);
             resolve(false);
           }
         };
 
-        this.tokenClient.requestAccessToken({ prompt: 'consent' });
+        // Request access token with user interaction (popup)
+        this.tokenClient.requestAccessToken({ 
+          prompt: 'consent', // Show consent screen for interactive auth
+          access_type: 'offline' // Request offline access
+        });
+
       } catch (error) {
-        console.error('Failed to request Gmail access token:', error);
+        console.error('❌ Failed to request Gmail access token:', error);
         resolve(false);
       }
     });
   }
 
   async signOut(): Promise<void> {
-    if (!this.isInitialized) return;
+    if (!this.isInitialized && !isGmailConfigured()) {
+      this.isSignedIn = false;
+      return;
+    }
 
     try {
-      const token = this.gapi.client.getToken();
-      if (token && token.access_token) {
-        window.google.accounts.oauth2.revoke(token.access_token);
-        this.gapi.client.setToken(null);
+      console.log('🚪 Signing out of Gmail...');
+      
+      if (this.gapi?.client) {
+        const token = this.gapi.client.getToken();
+        if (token && token.access_token) {
+          window.google.accounts.oauth2.revoke(token.access_token);
+          this.gapi.client.setToken(null);
+        }
       }
       
-      sessionStorage.removeItem('gmail_token');
+      // Clear stored session
+      localStorage.removeItem('gmail_token');
       this.isSignedIn = false;
-      console.log('Gmail signed out successfully');
+      console.log('✅ Gmail signed out successfully');
     } catch (error) {
-      console.error('Gmail sign-out failed:', error);
+      console.error('❌ Gmail sign-out failed:', error);
     }
   }
 
   isConnected(): boolean {
+    if (!isGmailConfigured()) {
+      return this.isSignedIn; // For mock mode
+    }
+
     if (!this.isInitialized) return false;
     
     const token = this.gapi?.client?.getToken();
@@ -488,7 +543,7 @@ Team Lead`
     }
 
     try {
-      if (isGmailConfigured()) {
+      if (isGmailConfigured() && this.gapi?.client) {
         const response = await this.gapi.client.request({
           path: 'https://www.googleapis.com/oauth2/v2/userinfo'
         });
@@ -502,18 +557,20 @@ Team Lead`
         };
       }
     } catch (error) {
-      console.error('Failed to get Gmail user info:', error);
+      console.error('❌ Failed to get Gmail user info:', error);
       throw error;
     }
   }
 
   async getMessages(filter: EmailFilter = {}, maxResults: number = 50): Promise<EmailMessage[]> {
-    if (!this.isConnected() && isGmailConfigured()) {
+    if (!this.isConnected()) {
       throw new Error('Gmail not connected');
     }
 
     try {
-      if (isGmailConfigured()) {
+      if (isGmailConfigured() && this.gapi?.client) {
+        console.log('📧 Fetching messages from Gmail API...');
+        
         // Real Gmail API implementation
         let query = '';
         
@@ -546,13 +603,15 @@ Team Lead`
             const emailMessage = this.parseGmailMessage(detailResponse.result);
             detailedMessages.push(emailMessage);
           } catch (error) {
-            console.error('Failed to get message details:', error);
+            console.error('❌ Failed to get message details:', error);
           }
         }
 
+        console.log(`✅ Fetched ${detailedMessages.length} messages from Gmail`);
         return detailedMessages;
       } else {
         // Mock implementation
+        console.log('📧 Using mock Gmail data...');
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         let filteredEmails = [...this.mockEmails];
@@ -580,7 +639,7 @@ Team Lead`
         return filteredEmails.slice(0, maxResults);
       }
     } catch (error) {
-      console.error('Failed to get Gmail messages:', error);
+      console.error('❌ Failed to get Gmail messages:', error);
       throw error;
     }
   }
@@ -637,12 +696,12 @@ Team Lead`
   }
 
   async markAsRead(messageId: string): Promise<boolean> {
-    if (!this.isConnected() && isGmailConfigured()) {
+    if (!this.isConnected()) {
       throw new Error('Gmail not connected');
     }
 
     try {
-      if (isGmailConfigured()) {
+      if (isGmailConfigured() && this.gapi?.client) {
         await this.gapi.client.gmail.users.messages.modify({
           userId: 'me',
           id: messageId,
@@ -659,18 +718,18 @@ Team Lead`
         return true;
       }
     } catch (error) {
-      console.error('Failed to mark message as read:', error);
+      console.error('❌ Failed to mark message as read:', error);
       return false;
     }
   }
 
   async starMessage(messageId: string, starred: boolean = true): Promise<boolean> {
-    if (!this.isConnected() && isGmailConfigured()) {
+    if (!this.isConnected()) {
       throw new Error('Gmail not connected');
     }
 
     try {
-      if (isGmailConfigured()) {
+      if (isGmailConfigured() && this.gapi?.client) {
         const labelIds = starred ? ['STARRED'] : [];
         const removeLabelIds = starred ? [] : ['STARRED'];
         
@@ -695,18 +754,18 @@ Team Lead`
         return true;
       }
     } catch (error) {
-      console.error('Failed to star/unstar message:', error);
+      console.error('❌ Failed to star/unstar message:', error);
       return false;
     }
   }
 
   async getUnreadCount(): Promise<number> {
-    if (!this.isConnected() && isGmailConfigured()) {
+    if (!this.isConnected()) {
       return 0;
     }
 
     try {
-      if (isGmailConfigured()) {
+      if (isGmailConfigured() && this.gapi?.client) {
         const response = await this.gapi.client.gmail.users.messages.list({
           userId: 'me',
           q: 'is:unread',
@@ -718,7 +777,7 @@ Team Lead`
         return this.mockEmails.filter(email => !email.isRead).length;
       }
     } catch (error) {
-      console.error('Failed to get unread count:', error);
+      console.error('❌ Failed to get unread count:', error);
       return 0;
     }
   }

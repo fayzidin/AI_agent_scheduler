@@ -1,34 +1,28 @@
-# 🔧 Google OAuth Setup - Fix Redirect URI Mismatch
+# 🔧 Google OAuth Setup - Fix Gmail Integration
 
 ## 🚨 **Current Error Analysis**
 
-You're getting this error because your Google Cloud Console project doesn't have the correct JavaScript origins configured for your development environment.
+You're getting "Failed to connect to Gmail at handleConnect" because your Google Cloud Console project doesn't have the correct JavaScript origins configured for your development environment.
 
-**Error Details:**
-- **Error**: `redirect_uri_mismatch`
-- **Origin**: `https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--10996a95.local-credentialless.webcontainer-api.io`
-- **Issue**: This WebContainer URL is not registered in Google Cloud Console
-
-## 🛠️ **Quick Fix Steps**
-
-### **Step 1: Get Your Current Development URL**
-Your current development URL is:
+### **Your Current Development URL:**
 ```
 https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--10996a95.local-credentialless.webcontainer-api.io
 ```
 
-### **Step 2: Update Google Cloud Console**
+## 🛠️ **Quick Fix Steps**
 
-1. **Go to Google Cloud Console**
+### **Step 1: Update Google Cloud Console**
+
+1. **Go to Google Cloud Console:**
    - Visit: https://console.cloud.google.com/
-   - Select your project
+   - Select your project (or create one if needed)
 
-2. **Navigate to OAuth Settings**
+2. **Navigate to OAuth Settings:**
    - Go to **APIs & Services** → **Credentials**
-   - Find your OAuth 2.0 Client ID
+   - Find your OAuth 2.0 Client ID (or create one)
    - Click the **Edit** button (pencil icon)
 
-3. **Add Authorized JavaScript Origins**
+3. **Add Authorized JavaScript Origins:**
    Add these URLs to **Authorized JavaScript origins**:
    ```
    https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--10996a95.local-credentialless.webcontainer-api.io
@@ -36,95 +30,111 @@ https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--10996a95.local-credentialless
    https://localhost:5173
    ```
 
-4. **Add Authorized Redirect URIs** (if needed)
-   Add these URLs to **Authorized redirect URIs**:
-   ```
-   https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--10996a95.local-credentialless.webcontainer-api.io
-   http://localhost:5173
-   https://localhost:5173
-   ```
-
-5. **Save Changes**
+4. **Save Changes:**
    - Click **Save**
    - Wait 5-10 minutes for changes to propagate
 
-### **Step 3: Alternative - Create New OAuth Client**
+### **Step 2: Enable Required APIs**
 
-If you don't have a Google Cloud project yet:
-
-1. **Create Google Cloud Project**
-   - Go to https://console.cloud.google.com/
-   - Click **New Project**
-   - Name it "AI Meeting Assistant"
-
-2. **Enable Calendar API**
+1. **Enable Gmail API:**
    - Go to **APIs & Services** → **Library**
+   - Search "Gmail API"
+   - Click **Enable**
+
+2. **Enable Calendar API:**
    - Search "Google Calendar API"
    - Click **Enable**
 
-3. **Create OAuth Credentials**
-   - Go to **APIs & Services** → **Credentials**
-   - Click **Create Credentials** → **OAuth client ID**
-   - Choose **Web application**
-   - Name: "AI Meeting Assistant - Dev"
+### **Step 3: Configure OAuth Consent Screen**
 
-4. **Configure Origins**
-   - **Authorized JavaScript origins**:
-     ```
-     https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--10996a95.local-credentialless.webcontainer-api.io
-     http://localhost:5173
-     https://localhost:5173
-     ```
+1. **Go to OAuth Consent Screen:**
+   - Choose **External** user type (unless you have Google Workspace)
+   - Fill required fields:
+     - App name: "AI Meeting Assistant"
+     - User support email: Your email
+     - Developer contact: Your email
 
-5. **Get Credentials**
-   - Copy **Client ID**
-   - Copy **API Key** (from API Keys section)
+2. **Add Scopes:**
+   - `https://www.googleapis.com/auth/gmail.readonly`
+   - `https://www.googleapis.com/auth/gmail.modify`
+   - `https://www.googleapis.com/auth/userinfo.email`
+   - `https://www.googleapis.com/auth/calendar`
+   - `https://www.googleapis.com/auth/calendar.events`
 
-### **Step 4: Update Environment Variables**
+3. **Add Test Users:**
+   - Add your email as a test user for development
 
-Update your `.env` file with the new credentials:
+### **Step 4: Get Your Credentials**
+
+1. **Get Client ID:**
+   - From **APIs & Services** → **Credentials**
+   - Copy your OAuth 2.0 Client ID
+
+2. **Get API Key:**
+   - Create an API Key if you don't have one
+   - Restrict it to Gmail API and Calendar API
+
+### **Step 5: Update Environment Variables**
+
+Update your `.env` file with the credentials:
 
 ```env
-# Google Calendar API Configuration
-VITE_GOOGLE_CLIENT_ID=your-new-client-id.apps.googleusercontent.com
-VITE_GOOGLE_API_KEY=your-new-api-key
+# Google API Configuration
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+VITE_GOOGLE_API_KEY=your-api-key
 ```
 
-## 🔄 **Testing the Fix**
+## 🧪 **Testing Steps**
 
-1. **Restart Development Server**
+1. **Clear Browser Cache:**
+   - Press `Ctrl+Shift+R` (or `Cmd+Shift+R` on Mac)
+   - Or open DevTools → Application → Storage → Clear storage
+
+2. **Restart Development Server:**
    ```bash
    npm run dev
    ```
 
-2. **Clear Browser Cache**
-   - Press `Ctrl+Shift+R` (or `Cmd+Shift+R` on Mac)
-   - Or open DevTools → Application → Storage → Clear storage
-
-3. **Test Google Calendar Connection**
+3. **Test Gmail Connection:**
    - Sign in to your app
-   - Go to Calendar Integration
-   - Click "Connect" for Google Calendar
+   - Go to Email Dashboard → Gmail Room
+   - Click "Connect Gmail"
    - Should now work without redirect URI error
 
-## 🚨 **Important Notes**
+## 🚨 **Common Issues & Solutions**
 
-### **WebContainer URLs Change**
-- WebContainer URLs are dynamic and change between sessions
-- You may need to update the authorized origins if the URL changes
-- For production, use your actual domain
+### **"This app isn't verified"**
+- Add your email as test user in OAuth consent screen
+- Click "Advanced" → "Go to AI Meeting Assistant (unsafe)"
 
-### **Development vs Production**
-- **Development**: Use WebContainer URL + localhost
-- **Production**: Use your actual domain (e.g., `https://yourdomain.com`)
+### **"Access blocked"**
+- Check authorized origins are correct
+- Wait 5-10 minutes after saving changes
+- Try incognito mode
 
-### **OAuth Consent Screen**
-If you see "This app isn't verified":
-1. Go to **OAuth consent screen** in Google Cloud Console
-2. Add your email as a test user
-3. For production, submit for verification
+### **"Invalid client"**
+- Verify Client ID is correct
+- Check if APIs are enabled
+- Ensure OAuth client is for "Web application"
 
-## 🔧 **Alternative: Use Localhost Proxy**
+### **"Popup blocked"**
+- Allow popups for this site
+- Try again after allowing popups
+
+## 📋 **Verification Checklist**
+
+- [ ] Google Cloud project exists
+- [ ] Gmail API enabled
+- [ ] Calendar API enabled
+- [ ] OAuth client ID created (Web application)
+- [ ] Current WebContainer URL added to authorized origins
+- [ ] OAuth consent screen configured
+- [ ] Test user added (your email)
+- [ ] Environment variables updated
+- [ ] Browser cache cleared
+- [ ] Development server restarted
+
+## 🔄 **Alternative: Use Localhost**
 
 If WebContainer URLs keep changing, you can use localhost:
 
@@ -142,41 +152,40 @@ export default defineConfig({
 });
 ```
 
-2. **Use Localhost URL**:
+2. **Configure OAuth for localhost:**
+   - Add `http://localhost:5173` to authorized origins
    - Access via: `http://localhost:5173`
-   - Configure Google OAuth for: `http://localhost:5173`
-
-## ✅ **Verification Checklist**
-
-- [ ] Google Cloud project created
-- [ ] Calendar API enabled
-- [ ] OAuth client ID created
-- [ ] Authorized JavaScript origins added
-- [ ] Environment variables updated
-- [ ] Development server restarted
-- [ ] Browser cache cleared
-- [ ] Google Calendar connection tested
 
 ## 🆘 **Still Having Issues?**
 
 If you're still getting errors:
 
-1. **Check Console Logs**
+1. **Check Console Logs:**
    - Open browser DevTools
-   - Look for detailed error messages
+   - Look for detailed error messages in Console
 
-2. **Verify Credentials**
+2. **Verify Credentials:**
    - Double-check Client ID and API Key
    - Ensure they're from the same Google Cloud project
 
-3. **Wait for Propagation**
+3. **Wait for Propagation:**
    - OAuth changes can take 5-10 minutes to take effect
    - Try again after waiting
 
-4. **Use Incognito Mode**
+4. **Use Incognito Mode:**
    - Test in private/incognito browser window
    - Avoids cached authentication issues
 
+## 📝 **Manual Setup Reminder**
+
+**You need to manually do this:**
+
+1. Go to Google Cloud Console → OAuth Credentials
+2. Under your OAuth 2.0 Client ID:
+   - Add your deployed frontend domain to **Authorized JavaScript Origins**
+   - Current domain: `https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--10996a95.local-credentialless.webcontainer-api.io`
+3. Save changes
+
 ---
 
-**🎉 After following these steps, your Google Calendar integration should work seamlessly!**
+**🎉 After following these steps, your Gmail integration should work seamlessly!**
