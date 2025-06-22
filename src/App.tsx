@@ -102,6 +102,7 @@ const HomePage: React.FC = () => {
                   <h3 className="text-xl font-bold text-white mb-2">AI Email Parser</h3>
                   <p className="text-indigo-200">Parse individual emails with AI assistance</p>
                 </div>
+              </a>
               </div>
             </div>
           </div>
