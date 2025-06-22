@@ -38,7 +38,7 @@ const Header: React.FC = () => {
                 <img
                   src="/AIMA_logo.svg"
                   alt="AIMA"
-                  className="w-12 h-8 object-contain filter brightness-0 invert"
+                  className="w-20 h-16 object-contain filter brightness-0 invert"
                   onError={(e) => {
                     // Fallback to text if SVG fails to load
                     const target = e.target as HTMLImageElement;
@@ -55,7 +55,6 @@ const Header: React.FC = () => {
             {/* Project Title */}
             <div>
               <h1 className="text-white font-bold text-xl">AI Meeting Assistant</h1>
-              <p className="text-indigo-200 text-xs">Powered by OpenAI</p>
             </div>
           </div>
 
