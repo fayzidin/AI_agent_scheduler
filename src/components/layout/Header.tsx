@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, LogOut, Settings, Menu, X, Brain } from 'lucide-react';
+import { User, LogOut, Settings, Menu, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header: React.FC = () => {
@@ -30,30 +30,26 @@ const Header: React.FC = () => {
     <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Combined Logo */}
-          <div className="flex items-center space-x-3">
-            {/* Combined Logo Container with AIMA + Brain in gradient div */}
-            <div className="w-16 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center space-x-2 px-2">
-              {/* AIMA Logo - Made bigger */}
-              <div className="w-8 h-8 flex items-center justify-center">
+          {/* Logo Section */}
+          <div className="flex items-center space-x-4">
+            {/* AIMA Logo - Much bigger and more prominent */}
+            <div className="w-20 h-14 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center px-3 shadow-2xl">
+              <div className="w-14 h-10 flex items-center justify-center">
                 <img
                   src="/AIMA_logo.svg"
                   alt="AIMA"
-                  className="w-7 h-7 object-contain filter brightness-0 invert"
+                  className="w-12 h-8 object-contain filter brightness-0 invert"
                   onError={(e) => {
                     // Fallback to text if SVG fails to load
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                     const parent = target.parentElement;
                     if (parent) {
-                      parent.innerHTML = '<span class="text-white font-bold text-sm">AIMA</span>';
+                      parent.innerHTML = '<span class="text-white font-bold text-lg">AIMA</span>';
                     }
                   }}
                 />
               </div>
-              
-              {/* Brain Icon */}
-              <Brain className="w-6 h-6 text-white" />
             </div>
             
             {/* Project Title */}
