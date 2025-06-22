@@ -31,7 +31,7 @@ const Header: React.FC = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo Section */}
-          <div className="flex items-center space-x-0">
+          <div className="flex items-center space-x-4">
             {/* Combined Logo Container */}
             <div className="flex items-center space-x-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl px-4 py-2 shadow-2xl">
               {/* Brain Icon */}
