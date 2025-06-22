@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap, Link, Shield } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap, Link, Shield, Download } from 'lucide-react';
 import { calendarService } from '../services/calendarService';
 import { CalendarProvider, AvailabilityResponse, CalendarEvent } from '../types/calendar';
 import { isGoogleConfigured } from '../config/google';
 import { useAuth } from '../contexts/AuthContext';
 import CRMIntegration from './CRMIntegration';
+import CalendarExportOptions from './CalendarExportOptions';
+import { CalendarEventData } from '../utils/calendarFileGenerator';
 
 interface CalendarIntegrationProps {
   parsedData: {
@@ -31,6 +33,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
   const [meetingDuration, setMeetingDuration] = useState(60);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [connectionError, setConnectionError] = useState<string>('');
+  const [showExportOptions, setShowExportOptions] = useState(false);
 
   useEffect(() => {
     setProviders(calendarService.getProviders());
@@ -254,6 +257,19 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
       return { status: 'not_configured', message: 'API not configured' };
     }
     return { status: provider.connected ? 'connected' : 'disconnected', message: provider.connected ? 'Connected' : 'Not connected' };
+  };
+
+  // Convert CalendarEvent to CalendarEventData for export
+  const getEventDataForExport = (event: CalendarEvent): CalendarEventData => {
+    return {
+      title: event.title,
+      start: event.start,
+      end: event.end,
+      description: event.description,
+      location: event.location,
+      attendees: event.attendees,
+      organizer: user?.email
+    };
   };
 
   if (parsedData.intent !== 'schedule_meeting') {
@@ -537,7 +553,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
               </div>
             </div>
 
-            <div className="bg-white/10 rounded-lg p-4 space-y-3">
+            <div className="bg-white/10 rounded-lg p-4 space-y-3 mb-6">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-300">Event Title:</span>
                 <span className="text-white font-semibold">{scheduledEvent.title}</span>
@@ -560,13 +576,30 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                 <span className="text-white font-semibold">{scheduledEvent.attendees.length} people</span>
               </div>
 
-              <div className="pt-3 border-t border-white/20">
+              <div className="pt-3 border-t border-white/20 flex items-center justify-between">
                 <button className="flex items-center space-x-2 text-blue-300 hover:text-blue-200 transition-colors">
                   <ExternalLink className="w-4 h-4" />
                   <span>View in Calendar</span>
                 </button>
+                
+                <button
+                  onClick={() => setShowExportOptions(!showExportOptions)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-all duration-200"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{showExportOptions ? 'Hide' : 'Export'} Options</span>
+                </button>
               </div>
             </div>
+
+            {/* Calendar Export Options */}
+            {showExportOptions && (
+              <div className="bg-white/5 rounded-xl p-6 border border-white/10">
+                <CalendarExportOptions 
+                  event={getEventDataForExport(scheduledEvent)}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -589,6 +622,45 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Manual Calendar Export - Always Available */}
+        {!scheduledEvent && selectedDate && selectedTime && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <Download className="w-6 h-6 text-blue-400 mr-3" />
+                <div>
+                  <h4 className="text-lg font-semibold text-blue-300">
+                    Manual Calendar Export
+                  </h4>
+                  <p className="text-blue-200 text-sm">
+                    Download calendar files or add to online calendars manually
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExportOptions(!showExportOptions)}
+                className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-all duration-200"
+              >
+                {showExportOptions ? 'Hide' : 'Show'} Export Options
+              </button>
+            </div>
+
+            {showExportOptions && (
+              <CalendarExportOptions 
+                event={{
+                  title: `Meeting with ${parsedData.contactName} - ${parsedData.company}`,
+                  start: new Date(`${selectedDate}T${selectedTime}:00`).toISOString(),
+                  end: new Date(new Date(`${selectedDate}T${selectedTime}:00`).getTime() + meetingDuration * 60000).toISOString(),
+                  description: `Scheduled meeting with ${parsedData.contactName} from ${parsedData.company}`,
+                  location: 'Video Conference',
+                  attendees: parsedData.participants,
+                  organizer: user?.email
+                }}
+              />
+            )}
           </div>
         )}
 
