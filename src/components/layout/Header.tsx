@@ -38,6 +38,29 @@ const Header: React.FC = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
+            {/* Bolt.new Badge */}
+            <a
+              href="https://bolt.new/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative"
+              title="Powered by Bolt.new"
+            >
+              <div className="relative w-12 h-12 lg:w-14 lg:h-14 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
+                <img
+                  src="/white_circle_360x360.png"
+                  alt="Powered by Bolt.new"
+                  className="w-full h-full object-contain drop-shadow-lg"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-600/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>
+              </div>
+              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                <div className="bg-black/80 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                  Powered by Bolt.new
+                </div>
+              </div>
+            </a>
+
             {user && (
               <>
                 <div className="text-white/70 text-sm">
@@ -96,7 +119,24 @@ const Header: React.FC = () => {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden">
+          <div className="md:hidden flex items-center space-x-3">
+            {/* Mobile Bolt.new Badge */}
+            <a
+              href="https://bolt.new/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative"
+              title="Powered by Bolt.new"
+            >
+              <div className="relative w-10 h-10 transition-transform duration-300 group-hover:scale-110">
+                <img
+                  src="/white_circle_360x360.png"
+                  alt="Powered by Bolt.new"
+                  className="w-full h-full object-contain drop-shadow-lg"
+                />
+              </div>
+            </a>
+
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
               className="p-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200"
