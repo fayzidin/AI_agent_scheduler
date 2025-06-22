@@ -105,7 +105,7 @@ const HomePage: React.FC = () => {
               </a>
               </div>
             </div>
-          </div>
+          
         )}
 
         {/* Guest Welcome Message */}
