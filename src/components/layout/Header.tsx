@@ -48,7 +48,7 @@ const Header: React.FC = () => {
             >
               <div className="relative w-14 h-14 lg:w-16 lg:h-16 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
                 <img
-                  src="/bolt-badge.svg"
+                  src="/white_circle_360x360.svg"
                   alt="Powered by Bolt.new"
                   className="w-full h-full object-contain drop-shadow-lg filter brightness-100 contrast-100"
                   onError={(e) => {
@@ -144,7 +144,7 @@ const Header: React.FC = () => {
             >
               <div className="relative w-10 h-10 transition-transform duration-300 group-hover:scale-110">
                 <img
-                  src="/bolt-badge.svg"
+                  src="/white_circle_360x360.svg"
                   alt="Powered by Bolt.new"
                   className="w-full h-full object-contain drop-shadow-lg"
                   onError={(e) => {
