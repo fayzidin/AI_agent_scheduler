@@ -33,27 +33,27 @@ const Header: React.FC = () => {
           {/* Combined Logo */}
           <div className="flex items-center space-x-3">
             {/* Combined Logo Container with AIMA + Brain in gradient div */}
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center space-x-1 px-1">
-              {/* AIMA Logo */}
-              <div className="w-5 h-5 flex items-center justify-center">
+            <div className="w-16 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center space-x-2 px-2">
+              {/* AIMA Logo - Made bigger */}
+              <div className="w-8 h-8 flex items-center justify-center">
                 <img
                   src="/AIMA_logo.svg"
                   alt="AIMA"
-                  className="w-4 h-4 object-contain filter brightness-0 invert"
+                  className="w-7 h-7 object-contain filter brightness-0 invert"
                   onError={(e) => {
                     // Fallback to text if SVG fails to load
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                     const parent = target.parentElement;
                     if (parent) {
-                      parent.innerHTML = '<span class="text-white font-bold text-xs">AI</span>';
+                      parent.innerHTML = '<span class="text-white font-bold text-sm">AIMA</span>';
                     }
                   }}
                 />
               </div>
               
               {/* Brain Icon */}
-              <Brain className="w-5 h-5 text-white" />
+              <Brain className="w-6 h-6 text-white" />
             </div>
             
             {/* Project Title */}
