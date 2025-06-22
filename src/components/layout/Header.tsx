@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, LogOut, Settings, Menu, X } from 'lucide-react';
+import { User, LogOut, Settings, Menu, X, Brain } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header: React.FC = () => {
@@ -32,13 +32,17 @@ const Header: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo Section */}
           <div className="flex items-center space-x-4">
-            {/* AIMA Logo - Much bigger and more prominent */}
-            <div className="w-20 h-14 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center px-3 shadow-2xl">
+            {/* Combined Logo Container */}
+            <div className="flex items-center space-x-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl px-4 py-2 shadow-2xl">
+              {/* Brain Icon */}
+              <Brain className="w-8 h-8 text-white" />
+              
+              {/* AIMA Logo */}
               <div className="w-14 h-10 flex items-center justify-center">
                 <img
                   src="/AIMA_logo.svg"
                   alt="AIMA"
-                  className="w-20 h-16 object-contain filter brightness-0 invert"
+                  className="w-12 h-8 object-contain filter brightness-0 invert"
                   onError={(e) => {
                     // Fallback to text if SVG fails to load
                     const target = e.target as HTMLImageElement;
