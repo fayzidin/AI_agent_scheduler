@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap, Link } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap, Link, Shield } from 'lucide-react';
 import { calendarService } from '../services/calendarService';
 import { CalendarProvider, AvailabilityResponse, CalendarEvent } from '../types/calendar';
 import { isGoogleConfigured } from '../config/google';
@@ -61,9 +61,18 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
     setConnectionError('');
     
     try {
+      console.log(`🔗 Connecting to ${providerId} calendar...`);
+      
+      // Show user-friendly message for Google Calendar
+      if (providerId === 'google') {
+        console.log('📅 Attempting silent authentication first (no popup)...');
+      }
+      
       const success = await calendarService.connectProvider(providerId);
       if (success) {
         setProviders(calendarService.getProviders());
+        
+        console.log(`✅ Successfully connected to ${providerId} calendar!`);
         
         // Auto-check availability after successful connection
         if (parsedData.intent === 'schedule_meeting' && selectedDate) {
@@ -74,7 +83,17 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
       }
     } catch (error: any) {
       console.error('Failed to connect provider:', error);
-      setConnectionError(error.message || 'Failed to connect to calendar provider');
+      
+      // Provide user-friendly error messages
+      let errorMessage = error.message || 'Failed to connect to calendar provider';
+      
+      if (error.message?.includes('redirect_uri_mismatch')) {
+        errorMessage = 'OAuth configuration error. Please check the setup guide for instructions on configuring Google Cloud Console.';
+      } else if (error.message?.includes('not configured')) {
+        errorMessage = 'Google Calendar API not configured. Please add your Google API credentials to environment variables.';
+      }
+      
+      setConnectionError(errorMessage);
     } finally {
       setIsConnecting(null);
     }
@@ -262,11 +281,11 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
         {user && (
           <div className="mb-6 bg-green-500/10 border border-green-500/20 rounded-xl p-4">
             <div className="flex items-center">
-              <CheckCircle className="w-5 h-5 text-green-400 mr-3" />
+              <Shield className="w-5 h-5 text-green-400 mr-3" />
               <div>
                 <h5 className="text-green-300 font-semibold">Signed In</h5>
                 <p className="text-green-200 text-sm">
-                  You're signed in as {user.email}. Calendar connections will be linked to your account.
+                  You're signed in as {user.email}. Calendar connections will be seamlessly linked to your account.
                 </p>
               </div>
             </div>

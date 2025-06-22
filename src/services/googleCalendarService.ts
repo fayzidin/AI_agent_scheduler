@@ -57,7 +57,7 @@ class GoogleCalendarService {
 
       this.gapi = window.gapi;
 
-      // Initialize Google Identity Services token client with proper configuration
+      // Initialize Google Identity Services token client with silent flow support
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
         scope: config.scopes.join(' '),
@@ -263,11 +263,91 @@ class GoogleCalendarService {
       return true;
     }
 
-    // If no stored session, request new token
+    // Try silent authentication first (no popup)
+    const silentSuccess = await this.attemptSilentAuth();
+    if (silentSuccess) {
+      return true;
+    }
+
+    // If silent auth fails, fall back to interactive auth
+    return this.attemptInteractiveAuth();
+  }
+
+  private async attemptSilentAuth(): Promise<boolean> {
     return new Promise((resolve) => {
       try {
         if (!this.tokenClient) {
-          console.error('Token client not initialized');
+          console.log('Token client not initialized for silent auth');
+          resolve(false);
+          return;
+        }
+
+        console.log('Attempting silent Google Calendar authentication...');
+
+        Sentry.addBreadcrumb({
+          message: 'Attempting silent Google Calendar authentication',
+          category: 'calendar',
+          level: 'info',
+        });
+
+        // Store the original callback
+        const originalCallback = this.tokenClient.callback;
+        
+        // Set up silent auth callback
+        this.tokenClient.callback = (tokenResponse: any) => {
+          try {
+            // Call original callback first
+            originalCallback(tokenResponse);
+            
+            // Resolve based on success/failure
+            if (tokenResponse.error) {
+              console.log('Silent auth failed:', tokenResponse.error);
+              resolve(false);
+            } else {
+              console.log('Silent auth successful!');
+              Sentry.addBreadcrumb({
+                message: 'Silent Google Calendar authentication successful',
+                category: 'calendar',
+                level: 'info',
+              });
+              resolve(true);
+            }
+            
+            // Restore original callback
+            this.tokenClient.callback = originalCallback;
+          } catch (error) {
+            console.error('Error in silent auth callback:', error);
+            this.tokenClient.callback = originalCallback;
+            resolve(false);
+          }
+        };
+
+        // Request access token silently (no user interaction)
+        this.tokenClient.requestAccessToken({ 
+          prompt: 'none' // This is the key - no user prompt
+        });
+
+        // Set a timeout for silent auth
+        setTimeout(() => {
+          if (this.tokenClient.callback !== originalCallback) {
+            console.log('Silent auth timeout');
+            this.tokenClient.callback = originalCallback;
+            resolve(false);
+          }
+        }, 5000);
+
+      } catch (error) {
+        console.error('Silent auth attempt failed:', error);
+        resolve(false);
+      }
+    });
+  }
+
+  private async attemptInteractiveAuth(): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        if (!this.tokenClient) {
+          console.error('Token client not initialized for interactive auth');
           Sentry.captureMessage('Token client not initialized', {
             level: 'error',
             tags: { component: 'google-calendar-signin' },
@@ -277,8 +357,10 @@ class GoogleCalendarService {
           return;
         }
 
+        console.log('Attempting interactive Google Calendar authentication...');
+
         Sentry.addBreadcrumb({
-          message: 'Starting Google Calendar sign-in',
+          message: 'Starting interactive Google Calendar sign-in',
           category: 'calendar',
           level: 'info',
           data: { currentOrigin: window.location.origin },
@@ -295,7 +377,7 @@ class GoogleCalendarService {
             
             // Resolve the promise based on success/failure
             if (tokenResponse.error) {
-              console.error('Sign-in failed:', tokenResponse.error);
+              console.error('Interactive auth failed:', tokenResponse.error);
               
               // Provide helpful error messages
               if (tokenResponse.error === 'redirect_uri_mismatch') {
@@ -316,7 +398,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
                 `);
               }
               
-              Sentry.captureException(new Error(`Sign-in failed: ${tokenResponse.error}`), {
+              Sentry.captureException(new Error(`Interactive auth failed: ${tokenResponse.error}`), {
                 tags: { component: 'google-calendar-signin' },
                 extra: { 
                   error: tokenResponse.error,
@@ -326,8 +408,9 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
               });
               resolve(false);
             } else {
+              console.log('Interactive auth successful!');
               Sentry.addBreadcrumb({
-                message: 'Google Calendar sign-in successful',
+                message: 'Interactive Google Calendar sign-in successful',
                 category: 'calendar',
                 level: 'info',
               });
@@ -337,7 +420,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
             // Restore original callback
             this.tokenClient.callback = originalCallback;
           } catch (error) {
-            console.error('Error in sign-in callback:', error);
+            console.error('Error in interactive auth callback:', error);
             Sentry.captureException(error, {
               tags: { component: 'google-calendar-signin-callback' },
             });
@@ -346,8 +429,10 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           }
         };
 
-        // Request access token
-        this.tokenClient.requestAccessToken();
+        // Request access token with user interaction (popup)
+        this.tokenClient.requestAccessToken({ 
+          prompt: 'consent' // Show consent screen for interactive auth
+        });
       } catch (error) {
         console.error('Failed to request access token:', error);
         Sentry.captureException(error, {
