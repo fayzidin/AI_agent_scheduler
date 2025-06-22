@@ -48,7 +48,7 @@ const Header: React.FC = () => {
             >
               <div className="relative w-12 h-12 lg:w-14 lg:h-14 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
                 <img
-                  src="public/white_circle_360x360.png"
+                  src="white_circle_360x360.png"
                   alt="Powered by Bolt.new"
                   className="w-full h-full object-contain drop-shadow-lg"
                 />
