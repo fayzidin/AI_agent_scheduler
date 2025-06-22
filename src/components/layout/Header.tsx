@@ -8,8 +8,13 @@ const Header: React.FC = () => {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const handleSignOut = async () => {
-    await signOut();
-    setShowUserMenu(false);
+    try {
+      await signOut();
+      setShowUserMenu(false);
+      setShowMobileMenu(false);
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -106,30 +111,44 @@ const Header: React.FC = () => {
 
                   {/* Dropdown Menu */}
                   {showUserMenu && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 shadow-2xl">
-                      <div className="p-4 border-b border-white/10">
-                        <p className="text-white font-semibold">{profile?.full_name || 'User'}</p>
-                        <p className="text-indigo-200 text-sm">{user.email}</p>
-                        {profile?.company && (
-                          <p className="text-indigo-300 text-xs">{profile.company}</p>
-                        )}
-                      </div>
+                    <>
+                      {/* Backdrop to close menu when clicking outside */}
+                      <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setShowUserMenu(false)}
+                      ></div>
                       
-                      <div className="p-2">
-                        <button className="w-full flex items-center space-x-2 px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200">
-                          <Settings className="w-4 h-4" />
-                          <span>Settings</span>
-                        </button>
+                      <div className="absolute right-0 mt-2 w-48 bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 shadow-2xl z-20">
+                        <div className="p-4 border-b border-white/10">
+                          <p className="text-white font-semibold">{profile?.full_name || 'User'}</p>
+                          <p className="text-indigo-200 text-sm">{user.email}</p>
+                          {profile?.company && (
+                            <p className="text-indigo-300 text-xs">{profile.company}</p>
+                          )}
+                        </div>
                         
-                        <button
-                          onClick={handleSignOut}
-                          className="w-full flex items-center space-x-2 px-3 py-2 text-red-300 hover:bg-red-500/10 rounded-lg transition-all duration-200"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          <span>Sign Out</span>
-                        </button>
+                        <div className="p-2">
+                          <button 
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              // Add settings functionality here
+                            }}
+                            className="w-full flex items-center space-x-2 px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200"
+                          >
+                            <Settings className="w-4 h-4" />
+                            <span>Settings</span>
+                          </button>
+                          
+                          <button
+                            onClick={handleSignOut}
+                            className="w-full flex items-center space-x-2 px-3 py-2 text-red-300 hover:bg-red-500/10 rounded-lg transition-all duration-200"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            <span>Sign Out</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    </>
                   )}
                 </div>
               </>
@@ -181,44 +200,58 @@ const Header: React.FC = () => {
 
         {/* Mobile Menu */}
         {showMobileMenu && (
-          <div className="md:hidden border-t border-white/20 py-4">
-            {user && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3 px-4">
-                  {profile?.avatar_url ? (
-                    <img
-                      src={profile.avatar_url}
-                      alt="Profile"
-                      className="w-10 h-10 rounded-lg object-cover"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-semibold">
-                      {getInitials(profile?.full_name || user.email || 'U')}
+          <>
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black/50 z-30 md:hidden" 
+              onClick={() => setShowMobileMenu(false)}
+            ></div>
+            
+            <div className="md:hidden border-t border-white/20 py-4 relative z-40 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
+              {user && (
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-3 px-4">
+                    {profile?.avatar_url ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt="Profile"
+                        className="w-10 h-10 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-semibold">
+                        {getInitials(profile?.full_name || user.email || 'U')}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-white font-semibold">{profile?.full_name || 'User'}</p>
+                      <p className="text-indigo-200 text-sm">{user.email}</p>
                     </div>
-                  )}
-                  <div>
-                    <p className="text-white font-semibold">{profile?.full_name || 'User'}</p>
-                    <p className="text-indigo-200 text-sm">{user.email}</p>
+                  </div>
+                  
+                  <div className="space-y-2 px-4">
+                    <button 
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        // Add settings functionality here
+                      }}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200"
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span>Settings</span>
+                    </button>
+                    
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-red-300 hover:bg-red-500/10 rounded-lg transition-all duration-200"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
                   </div>
                 </div>
-                
-                <div className="space-y-2 px-4">
-                  <button className="w-full flex items-center space-x-2 px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200">
-                    <Settings className="w-4 h-4" />
-                    <span>Settings</span>
-                  </button>
-                  
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full flex items-center space-x-2 px-3 py-2 text-red-300 hover:bg-red-500/10 rounded-lg transition-all duration-200"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </header>
