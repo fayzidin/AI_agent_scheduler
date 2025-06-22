@@ -38,7 +38,7 @@ const Header: React.FC = () => {
               <Brain className="w-6 h-6 text-white" />
               
               {/* AIMA Logo */}
-              <div className="w-12 h-12 flex items-center justify-center">
+              <div className="w-12 h-10 flex items-center justify-center">
                 <img
                   src="/AIMA_logo.svg"
                   alt="AIMA"
