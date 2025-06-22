@@ -57,12 +57,20 @@ class GoogleCalendarService {
 
       this.gapi = window.gapi;
 
-      // Initialize Google Identity Services token client
+      // Initialize Google Identity Services token client with proper configuration
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
         scope: config.scopes.join(' '),
         callback: (tokenResponse: any) => {
           this.handleTokenResponse(tokenResponse);
+        },
+        // Add error handling for redirect URI issues
+        error_callback: (error: any) => {
+          console.error('Google OAuth error:', error);
+          Sentry.captureException(new Error(`Google OAuth error: ${JSON.stringify(error)}`), {
+            tags: { component: 'google-oauth-error' },
+            extra: { error, currentOrigin: window.location.origin },
+          });
         }
       });
 
@@ -72,13 +80,21 @@ class GoogleCalendarService {
       const existingToken = this.gapi.client.getToken();
       this.isSignedIn = existingToken && existingToken.access_token;
       
+      // Try to restore from stored session
+      if (!this.isSignedIn) {
+        this.loadStoredToken();
+      }
+      
       console.log('Google Calendar API initialized successfully');
       
       Sentry.addBreadcrumb({
         message: 'Google Calendar API initialized successfully',
         category: 'calendar',
         level: 'info',
-        data: { hasExistingToken: !!existingToken },
+        data: { 
+          hasExistingToken: !!existingToken,
+          currentOrigin: window.location.origin 
+        },
       });
       
       return true;
@@ -86,7 +102,11 @@ class GoogleCalendarService {
       console.error('Failed to initialize Google Calendar API:', error);
       Sentry.captureException(error, {
         tags: { component: 'google-calendar-init' },
-        extra: { isConfigured: isGoogleConfigured() },
+        extra: { 
+          isConfigured: isGoogleConfigured(),
+          currentOrigin: window.location.origin,
+          userAgent: navigator.userAgent
+        },
       });
       return false;
     }
@@ -96,9 +116,20 @@ class GoogleCalendarService {
     try {
       if (tokenResponse.error) {
         console.error('Token acquisition failed:', tokenResponse.error);
-        Sentry.captureException(new Error(`Token acquisition failed: ${tokenResponse.error}`), {
+        
+        // Provide specific error messages for common issues
+        let errorMessage = `Token acquisition failed: ${tokenResponse.error}`;
+        if (tokenResponse.error === 'redirect_uri_mismatch') {
+          errorMessage = `OAuth configuration error: The current domain (${window.location.origin}) is not authorized in Google Cloud Console. Please add this domain to your OAuth client's authorized JavaScript origins.`;
+        }
+        
+        Sentry.captureException(new Error(errorMessage), {
           tags: { component: 'google-calendar-auth' },
-          extra: { error: tokenResponse.error },
+          extra: { 
+            error: tokenResponse.error,
+            currentOrigin: window.location.origin,
+            details: tokenResponse
+          },
         });
         this.isSignedIn = false;
         return;
@@ -240,6 +271,7 @@ class GoogleCalendarService {
           Sentry.captureMessage('Token client not initialized', {
             level: 'error',
             tags: { component: 'google-calendar-signin' },
+            extra: { currentOrigin: window.location.origin },
           });
           resolve(false);
           return;
@@ -249,6 +281,7 @@ class GoogleCalendarService {
           message: 'Starting Google Calendar sign-in',
           category: 'calendar',
           level: 'info',
+          data: { currentOrigin: window.location.origin },
         });
 
         // Store the original callback
@@ -262,9 +295,34 @@ class GoogleCalendarService {
             
             // Resolve the promise based on success/failure
             if (tokenResponse.error) {
+              console.error('Sign-in failed:', tokenResponse.error);
+              
+              // Provide helpful error messages
+              if (tokenResponse.error === 'redirect_uri_mismatch') {
+                console.error(`
+🚨 OAuth Configuration Error:
+
+The current domain (${window.location.origin}) is not authorized in your Google Cloud Console.
+
+To fix this:
+1. Go to https://console.cloud.google.com/
+2. Navigate to APIs & Services → Credentials
+3. Edit your OAuth 2.0 Client ID
+4. Add this URL to "Authorized JavaScript origins":
+   ${window.location.origin}
+5. Save and wait 5-10 minutes for changes to propagate
+
+See GOOGLE_OAUTH_SETUP.md for detailed instructions.
+                `);
+              }
+              
               Sentry.captureException(new Error(`Sign-in failed: ${tokenResponse.error}`), {
                 tags: { component: 'google-calendar-signin' },
-                extra: { error: tokenResponse.error },
+                extra: { 
+                  error: tokenResponse.error,
+                  currentOrigin: window.location.origin,
+                  details: tokenResponse
+                },
               });
               resolve(false);
             } else {
@@ -294,6 +352,7 @@ class GoogleCalendarService {
         console.error('Failed to request access token:', error);
         Sentry.captureException(error, {
           tags: { component: 'google-calendar-signin' },
+          extra: { currentOrigin: window.location.origin },
         });
         resolve(false);
       }
