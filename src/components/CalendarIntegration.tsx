@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap, Link } from 'lucide-react';
 import { calendarService } from '../services/calendarService';
 import { CalendarProvider, AvailabilityResponse, CalendarEvent } from '../types/calendar';
 import { isGoogleConfigured } from '../config/google';
+import { useAuth } from '../contexts/AuthContext';
 import CRMIntegration from './CRMIntegration';
 
 interface CalendarIntegrationProps {
@@ -19,6 +20,7 @@ interface CalendarIntegrationProps {
 }
 
 const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, onScheduled, emailContent }) => {
+  const { user } = useAuth();
   const [providers, setProviders] = useState<CalendarProvider[]>([]);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
@@ -50,6 +52,11 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
   };
 
   const handleConnectProvider = async (providerId: string) => {
+    if (!user) {
+      setConnectionError('Please sign in to connect calendar providers');
+      return;
+    }
+
     setIsConnecting(providerId);
     setConnectionError('');
     
@@ -251,6 +258,21 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
           </div>
         </div>
 
+        {/* User Authentication Status */}
+        {user && (
+          <div className="mb-6 bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+            <div className="flex items-center">
+              <CheckCircle className="w-5 h-5 text-green-400 mr-3" />
+              <div>
+                <h5 className="text-green-300 font-semibold">Signed In</h5>
+                <p className="text-green-200 text-sm">
+                  You're signed in as {user.email}. Calendar connections will be linked to your account.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Target Date Display */}
         {selectedDate && (
           <div className="mb-8 bg-white/10 rounded-xl p-4 border border-white/10">
@@ -324,13 +346,15 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                     ) : (
                       <button
                         onClick={() => handleConnectProvider(provider.id)}
-                        disabled={isConnecting === provider.id}
+                        disabled={isConnecting === provider.id || !user}
                         className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-lg text-sm hover:bg-blue-500/30 transition-all duration-200 disabled:opacity-50 flex items-center space-x-1"
                       >
                         {isConnecting === provider.id ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : null}
-                        <span>Connect</span>
+                        ) : (
+                          <Link className="w-3 h-3" />
+                        )}
+                        <span>{isConnecting === provider.id ? 'Connecting...' : 'Connect'}</span>
                       </button>
                     )}
                   </div>
@@ -375,6 +399,21 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                   VITE_GOOGLE_API_KEY=your-api-key
                 </div>
                 <p className="mt-2">3. Check GOOGLE_CALENDAR_SETUP.md for detailed instructions</p>
+              </div>
+            </div>
+          )}
+
+          {/* Sign In Required Notice */}
+          {!user && (
+            <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-blue-400 mr-3" />
+                <div>
+                  <h5 className="text-blue-300 font-semibold">Sign In Required</h5>
+                  <p className="text-blue-200 text-sm">
+                    Please sign in to your account to connect calendar providers and save your integration preferences.
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -513,7 +552,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
         )}
 
         {/* No Connected Providers */}
-        {!hasConnectedProvider() && (
+        {!hasConnectedProvider() && user && (
           <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-6">
             <div className="flex items-center">
               <AlertCircle className="w-6 h-6 text-yellow-400 mr-3" />

@@ -14,6 +14,7 @@ class GoogleCalendarService {
   private isSignedIn = false;
   private gapi: any = null;
   private tokenClient: any = null;
+  private currentUser: any = null;
 
   async initialize(): Promise<boolean> {
     if (!isGoogleConfigured()) {
@@ -36,7 +37,7 @@ class GoogleCalendarService {
       
       const config = getGoogleConfig();
       
-      // Initialize gapi client (without auth2)
+      // Initialize gapi client
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Google API client initialization timeout'));
@@ -48,7 +49,7 @@ class GoogleCalendarService {
         });
       });
 
-      // Initialize the client (without clientId and scope - these are handled by GIS)
+      // Initialize the client
       await window.gapi.client.init({
         apiKey: config.apiKey,
         discoveryDocs: config.discoveryDocs
@@ -61,36 +62,7 @@ class GoogleCalendarService {
         client_id: config.clientId,
         scope: config.scopes.join(' '),
         callback: (tokenResponse: any) => {
-          try {
-            if (tokenResponse.error) {
-              console.error('Token acquisition failed:', tokenResponse.error);
-              Sentry.captureException(new Error(`Token acquisition failed: ${tokenResponse.error}`), {
-                tags: { component: 'google-calendar-auth' },
-                extra: { error: tokenResponse.error },
-              });
-              this.isSignedIn = false;
-              return;
-            }
-            
-            // Set the access token for gapi client
-            this.gapi.client.setToken({
-              access_token: tokenResponse.access_token
-            });
-            
-            this.isSignedIn = true;
-            console.log('Google Calendar access token acquired successfully');
-            
-            Sentry.addBreadcrumb({
-              message: 'Google Calendar token acquired successfully',
-              category: 'calendar',
-              level: 'info',
-            });
-          } catch (error) {
-            console.error('Error in token callback:', error);
-            Sentry.captureException(error, {
-              tags: { component: 'google-calendar-token-callback' },
-            });
-          }
+          this.handleTokenResponse(tokenResponse);
         }
       });
 
@@ -100,7 +72,7 @@ class GoogleCalendarService {
       const existingToken = this.gapi.client.getToken();
       this.isSignedIn = existingToken && existingToken.access_token;
       
-      console.log('Google Calendar API initialized successfully with GIS');
+      console.log('Google Calendar API initialized successfully');
       
       Sentry.addBreadcrumb({
         message: 'Google Calendar API initialized successfully',
@@ -116,6 +88,85 @@ class GoogleCalendarService {
         tags: { component: 'google-calendar-init' },
         extra: { isConfigured: isGoogleConfigured() },
       });
+      return false;
+    }
+  }
+
+  private handleTokenResponse(tokenResponse: any) {
+    try {
+      if (tokenResponse.error) {
+        console.error('Token acquisition failed:', tokenResponse.error);
+        Sentry.captureException(new Error(`Token acquisition failed: ${tokenResponse.error}`), {
+          tags: { component: 'google-calendar-auth' },
+          extra: { error: tokenResponse.error },
+        });
+        this.isSignedIn = false;
+        return;
+      }
+      
+      // Set the access token for gapi client
+      this.gapi.client.setToken({
+        access_token: tokenResponse.access_token
+      });
+      
+      this.isSignedIn = true;
+      console.log('Google Calendar access token acquired successfully');
+      
+      Sentry.addBreadcrumb({
+        message: 'Google Calendar token acquired successfully',
+        category: 'calendar',
+        level: 'info',
+      });
+
+      // Store token info for session persistence
+      this.storeTokenInfo(tokenResponse);
+      
+    } catch (error) {
+      console.error('Error in token callback:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'google-calendar-token-callback' },
+      });
+    }
+  }
+
+  private storeTokenInfo(tokenResponse: any) {
+    // Store token info in sessionStorage for persistence during the session
+    const tokenInfo = {
+      access_token: tokenResponse.access_token,
+      expires_at: Date.now() + (tokenResponse.expires_in * 1000),
+      scope: tokenResponse.scope
+    };
+    
+    try {
+      sessionStorage.setItem('google_calendar_token', JSON.stringify(tokenInfo));
+    } catch (error) {
+      console.warn('Failed to store token info:', error);
+    }
+  }
+
+  private loadStoredToken(): boolean {
+    try {
+      const storedToken = sessionStorage.getItem('google_calendar_token');
+      if (!storedToken) return false;
+
+      const tokenInfo = JSON.parse(storedToken);
+      
+      // Check if token is still valid (with 5 minute buffer)
+      if (tokenInfo.expires_at && Date.now() < (tokenInfo.expires_at - 5 * 60 * 1000)) {
+        this.gapi.client.setToken({
+          access_token: tokenInfo.access_token
+        });
+        this.isSignedIn = true;
+        console.log('Restored Google Calendar session from storage');
+        return true;
+      } else {
+        // Token expired, remove it
+        sessionStorage.removeItem('google_calendar_token');
+        return false;
+      }
+    } catch (error) {
+      console.warn('Failed to load stored token:', error);
+      sessionStorage.removeItem('google_calendar_token');
       return false;
     }
   }
@@ -176,6 +227,12 @@ class GoogleCalendarService {
       if (!initialized) return false;
     }
 
+    // First, try to restore from stored session
+    if (this.loadStoredToken()) {
+      return true;
+    }
+
+    // If no stored session, request new token
     return new Promise((resolve) => {
       try {
         if (!this.tokenClient) {
@@ -262,6 +319,9 @@ class GoogleCalendarService {
         this.gapi.client.setToken(null);
       }
       
+      // Clear stored session
+      sessionStorage.removeItem('google_calendar_token');
+      
       this.isSignedIn = false;
       console.log('Google Calendar signed out successfully');
     } catch (error) {
@@ -277,7 +337,14 @@ class GoogleCalendarService {
     
     // Check if we have a valid access token
     const token = this.gapi?.client?.getToken();
-    return this.isSignedIn && token && token.access_token;
+    const hasValidToken = this.isSignedIn && token && token.access_token;
+    
+    // Also check stored session if not currently connected
+    if (!hasValidToken && this.gapi?.client) {
+      return this.loadStoredToken();
+    }
+    
+    return hasValidToken;
   }
 
   async checkAvailability(date: string, participants: string[]): Promise<AvailabilityResponse> {
