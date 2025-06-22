@@ -4,7 +4,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthGuard from './components/auth/AuthGuard';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import Header from './components/layout/Header';
+import Footer from './components/layout/Footer';
 import EmailParser from './components/EmailParser';
+import PrivacyPolicy from './components/legal/PrivacyPolicy';
+import TermsOfService from './components/legal/TermsOfService';
 
 const AppContent: React.FC = () => {
   const { user, profile, loading } = useAuth();
@@ -19,7 +22,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex flex-col">
       {/* Animated background pattern */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute inset-0" style={{
@@ -27,51 +30,67 @@ const AppContent: React.FC = () => {
         }}></div>
       </div>
       
-      <div className="relative z-10">
+      <div className="relative z-10 flex flex-col min-h-screen">
         <Header />
         
-        <div className="container mx-auto px-4 py-12">
-          <div className="max-w-4xl mx-auto">
-            {/* Welcome Message for Authenticated Users */}
-            {user && profile && (
-              <div className="text-center mb-16">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-8 shadow-2xl">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                
-                <h1 className="text-6xl font-bold text-white mb-6 tracking-tight">
-                  Welcome back, {profile.full_name?.split(' ')[0] || 'there'}!
-                </h1>
-                <p className="text-xl text-indigo-200 max-w-3xl mx-auto leading-relaxed">
-                  Ready to parse some emails? Transform your email content into structured meeting information with the power of artificial intelligence.
-                </p>
-              </div>
-            )}
+        <main className="flex-1">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
+          </Routes>
+        </main>
 
-            {/* Guest Welcome Message */}
-            {!user && (
-              <div className="text-center mb-16">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-8 shadow-2xl">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                
-                <h1 className="text-6xl font-bold text-white mb-6 tracking-tight">
-                  AI Meeting Assistant
-                </h1>
-                <p className="text-xl text-indigo-200 max-w-3xl mx-auto leading-relaxed">
-                  Transform your emails into structured meeting information with the power of artificial intelligence. 
-                  Simply paste your email content and let our AI extract all the important details.
-                </p>
-              </div>
-            )}
+        <Footer />
+      </div>
+    </div>
+  );
+};
 
-            <EmailParser />
+const HomePage: React.FC = () => {
+  const { user, profile } = useAuth();
+
+  return (
+    <div className="container mx-auto px-4 py-12">
+      <div className="max-w-4xl mx-auto">
+        {/* Welcome Message for Authenticated Users */}
+        {user && profile && (
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-8 shadow-2xl">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            
+            <h1 className="text-6xl font-bold text-white mb-6 tracking-tight">
+              Welcome back, {profile.full_name?.split(' ')[0] || 'there'}!
+            </h1>
+            <p className="text-xl text-indigo-200 max-w-3xl mx-auto leading-relaxed">
+              Ready to parse some emails? Transform your email content into structured meeting information with the power of artificial intelligence.
+            </p>
           </div>
-        </div>
+        )}
+
+        {/* Guest Welcome Message */}
+        {!user && (
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-8 shadow-2xl">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            
+            <h1 className="text-6xl font-bold text-white mb-6 tracking-tight">
+              AI Meeting Assistant
+            </h1>
+            <p className="text-xl text-indigo-200 max-w-3xl mx-auto leading-relaxed">
+              Transform your emails into structured meeting information with the power of artificial intelligence. 
+              Simply paste your email content and let our AI extract all the important details.
+            </p>
+          </div>
+        )}
+
+        <EmailParser />
       </div>
     </div>
   );
