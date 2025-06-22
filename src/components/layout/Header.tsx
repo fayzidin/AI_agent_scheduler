@@ -43,20 +43,34 @@ const Header: React.FC = () => {
               href="https://bolt.new/"
               target="_blank"
               rel="noopener noreferrer"
-              className="group relative"
+              className="group relative flex items-center justify-center"
               title="Powered by Bolt.new"
             >
-              <div className="relative w-12 h-12 lg:w-14 lg:h-14 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
+              <div className="relative w-14 h-14 lg:w-16 lg:h-16 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
                 <img
-                  src="white_circle_360x360.png"
+                  src="/bolt-badge.svg"
                   alt="Powered by Bolt.new"
-                  className="w-full h-full object-contain drop-shadow-lg"
+                  className="w-full h-full object-contain drop-shadow-lg filter brightness-100 contrast-100"
+                  onError={(e) => {
+                    // Fallback to a simple text badge if image fails
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div class="w-14 h-14 lg:w-16 lg:h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
+                          <span class="text-black font-bold text-xs text-center leading-tight">BOLT<br/>.NEW</span>
+                        </div>
+                      `;
+                    }
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-600/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>
               </div>
-              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                <div className="bg-black/80 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+              <div className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                <div className="bg-black/90 text-white text-xs px-3 py-1 rounded-lg whitespace-nowrap shadow-lg">
                   Powered by Bolt.new
+                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-2 h-2 bg-black/90 rotate-45"></div>
                 </div>
               </div>
             </a>
@@ -125,14 +139,27 @@ const Header: React.FC = () => {
               href="https://bolt.new/"
               target="_blank"
               rel="noopener noreferrer"
-              className="group relative"
+              className="group relative flex items-center justify-center"
               title="Powered by Bolt.new"
             >
               <div className="relative w-10 h-10 transition-transform duration-300 group-hover:scale-110">
                 <img
-                  src="/white_circle_360x360.png"
+                  src="/bolt-badge.svg"
                   alt="Powered by Bolt.new"
                   className="w-full h-full object-contain drop-shadow-lg"
+                  onError={(e) => {
+                    // Fallback to a simple text badge if image fails
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
+                          <span class="text-black font-bold text-xs text-center leading-tight">BOLT<br/>.NEW</span>
+                        </div>
+                      `;
+                    }
+                  }}
                 />
               </div>
             </a>
