@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2, AlertCircle, CheckCircle, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const AuthModal: React.FC = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
+interface AuthModalProps {
+  initialMode?: 'signin' | 'signup';
+  onClose: () => void;
+}
+
+const AuthModal: React.FC<AuthModalProps> = ({ initialMode = 'signin', onClose }) => {
+  const [isSignUp, setIsSignUp] = useState(initialMode === 'signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -27,11 +32,18 @@ const AuthModal: React.FC = () => {
           setError(error.message);
         } else {
           setSuccess('Account created successfully! Please check your email to verify your account.');
+          // Auto-close modal after successful signup
+          setTimeout(() => {
+            onClose();
+          }, 2000);
         }
       } else {
         const { error } = await signIn(email, password);
         if (error) {
           setError(error.message);
+        } else {
+          // Auto-close modal after successful signin
+          onClose();
         }
       }
     } catch (err) {
@@ -51,7 +63,7 @@ const AuthModal: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       {/* Animated background pattern */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute inset-0" style={{
@@ -61,6 +73,14 @@ const AuthModal: React.FC = () => {
 
       <div className="relative z-10 w-full max-w-md">
         <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20">
+          {/* Close Button */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-6 shadow-2xl">
@@ -177,10 +197,14 @@ const AuthModal: React.FC = () => {
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>{isSignUp ? 'Creating Account...' : 'Signing In...'}</span>
+                  <span className="text-lg">
+                    {isSignUp ? 'Creating Account...' : 'Signing In...'}
+                  </span>
                 </>
               ) : (
-                <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
+                <span className="text-lg">
+                  {isSignUp ? 'Create Account' : 'Sign In'}
+                </span>
               )}
             </button>
           </form>
@@ -201,7 +225,7 @@ const AuthModal: React.FC = () => {
           {/* Demo Mode Notice */}
           <div className="mt-6 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
             <p className="text-blue-200 text-sm text-center">
-              🚀 <strong>Demo Mode:</strong> Create an account to save your parsing history and access advanced features!
+              🚀 <strong>Full Access:</strong> Create an account to connect Gmail/Outlook and access advanced features!
             </p>
           </div>
         </div>

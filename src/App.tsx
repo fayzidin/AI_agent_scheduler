@@ -85,9 +85,12 @@ const HomePage: React.FC = () => {
               Try AI Parser Free
             </a>
             {!user && (
-              <button className="px-8 py-4 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-all duration-300 border border-white/20 text-lg">
+              <a
+                href="/dashboard"
+                className="px-8 py-4 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-all duration-300 border border-white/20 text-lg"
+              >
                 Sign Up for Full Access
-              </button>
+              </a>
             )}
           </div>
 
@@ -303,9 +306,9 @@ const HomePage: React.FC = () => {
                   Priority support
                 </li>
               </ul>
-              <button className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200">
+              <a href="/dashboard" className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 block text-center">
                 Get Started
-              </button>
+              </a>
             </div>
 
             <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-xl border border-white/20">
@@ -363,9 +366,12 @@ const HomePage: React.FC = () => {
                 Try AI Parser Free
               </a>
               {!user && (
-                <button className="px-8 py-4 bg-gradient-to-r from-blue-500 via-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-blue-600 hover:via-purple-700 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] text-lg">
+                <a
+                  href="/dashboard"
+                  className="px-8 py-4 bg-gradient-to-r from-blue-500 via-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-blue-600 hover:via-purple-700 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] text-lg"
+                >
                   Sign Up for Full Access
-                </button>
+                </a>
               )}
             </div>
             
