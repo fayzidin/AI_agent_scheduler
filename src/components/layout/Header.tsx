@@ -32,19 +32,14 @@ const Header: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo Section */}
           <div className="flex items-center space-x-2">
-            {/* Combined Logo Container */}
-            <div className="flex items-center space-x-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl px-4 py-2 shadow-2xl">
-              {/* Brain Icon */}
+            <a href="/" className="flex items-center space-x-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl px-4 py-2 shadow-2xl">
               <Brain className="w-5 h-5 text-white" />
-              
-              {/* AIMA Logo */}
               <div className="w-14 h-10 flex items-center justify-center">
                 <img
                   src="/AIMA_logo.svg"
                   alt="AIMA"
                   className="w-20 h-16 object-contain filter brightness-0 invert"
                   onError={(e) => {
-                    // Fallback to text if SVG fails to load
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                     const parent = target.parentElement;
@@ -54,9 +49,8 @@ const Header: React.FC = () => {
                   }}
                 />
               </div>
-            </div>
+            </a>
             
-            {/* Project Title */}
             <div>
               <h1 className="text-white font-bold text-xl">AI Meeting Assistant</h1>
             </div>
@@ -64,7 +58,22 @@ const Header: React.FC = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
-            {/* Bolt.new Badge - Enhanced visibility */}
+            {/* Navigation Links */}
+            <nav className="flex items-center space-x-6">
+              <a href="/" className="text-white hover:text-blue-300 transition-colors">
+                Home
+              </a>
+              <a href="/parser" className="text-white hover:text-blue-300 transition-colors">
+                Try AI Parser
+              </a>
+              {user && (
+                <a href="/dashboard" className="text-white hover:text-blue-300 transition-colors">
+                  Dashboard
+                </a>
+              )}
+            </nav>
+
+            {/* Bolt.new Badge */}
             <a
               href="https://bolt.new/"
               target="_blank"
@@ -73,14 +82,12 @@ const Header: React.FC = () => {
               title="Powered by Bolt.new"
             >
               <div className="relative w-16 h-16 lg:w-18 lg:h-18 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
-                {/* Background circle for better visibility */}
                 <div className="absolute inset-0 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-2xl"></div>
                 <img
                   src="/white_circle_360x360.svg"
                   alt="Powered by Bolt.new"
                   className="relative w-full h-full object-contain p-1 filter drop-shadow-lg"
                   onError={(e) => {
-                    // Fallback to a simple text badge if image fails
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                     const parent = target.parentElement;
@@ -93,10 +100,8 @@ const Header: React.FC = () => {
                     }
                   }}
                 />
-                {/* Glow effect on hover */}
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-400/30 to-purple-500/30 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-md"></div>
               </div>
-              {/* Tooltip */}
               <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
                 <div className="bg-black/90 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap shadow-xl border border-white/10">
                   Powered by Bolt.new
@@ -105,13 +110,13 @@ const Header: React.FC = () => {
               </div>
             </a>
 
-            {user && (
+            {/* User Section */}
+            {user ? (
               <>
                 <div className="text-white/70 text-sm">
                   Welcome back, <span className="text-white font-semibold">{profile?.full_name || user.email}</span>
                 </div>
                 
-                {/* User Menu */}
                 <div className="relative">
                   <button
                     onClick={() => setShowUserMenu(!showUserMenu)}
@@ -130,10 +135,8 @@ const Header: React.FC = () => {
                     )}
                   </button>
 
-                  {/* Dropdown Menu */}
                   {showUserMenu && (
                     <>
-                      {/* Backdrop to close menu when clicking outside */}
                       <div 
                         className="fixed inset-0 z-10" 
                         onClick={() => setShowUserMenu(false)}
@@ -152,7 +155,6 @@ const Header: React.FC = () => {
                           <button 
                             onClick={() => {
                               setShowUserMenu(false);
-                              // Add settings functionality here
                             }}
                             className="w-full flex items-center space-x-2 px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200"
                           >
@@ -173,12 +175,20 @@ const Header: React.FC = () => {
                   )}
                 </div>
               </>
+            ) : (
+              <div className="flex items-center space-x-4">
+                <button className="text-white hover:text-blue-300 transition-colors">
+                  Sign In
+                </button>
+                <button className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200">
+                  Sign Up
+                </button>
+              </div>
             )}
           </div>
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center space-x-3">
-            {/* Mobile Bolt.new Badge - Enhanced visibility */}
             <a
               href="https://bolt.new/"
               target="_blank"
@@ -187,14 +197,12 @@ const Header: React.FC = () => {
               title="Powered by Bolt.new"
             >
               <div className="relative w-12 h-12 transition-transform duration-300 group-hover:scale-110">
-                {/* Background circle for better visibility */}
                 <div className="absolute inset-0 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-xl"></div>
                 <img
                   src="/white_circle_360x360.svg"
                   alt="Powered by Bolt.new"
                   className="relative w-full h-full object-contain p-1 filter drop-shadow-lg"
                   onError={(e) => {
-                    // Fallback to a simple text badge if image fails
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                     const parent = target.parentElement;
@@ -222,14 +230,27 @@ const Header: React.FC = () => {
         {/* Mobile Menu */}
         {showMobileMenu && (
           <>
-            {/* Backdrop */}
             <div 
               className="fixed inset-0 bg-black/50 z-30 md:hidden" 
               onClick={() => setShowMobileMenu(false)}
             ></div>
             
             <div className="md:hidden border-t border-white/20 py-4 relative z-40 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-              {user && (
+              <nav className="space-y-2 px-4 mb-4">
+                <a href="/" className="block px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200">
+                  Home
+                </a>
+                <a href="/parser" className="block px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200">
+                  Try AI Parser
+                </a>
+                {user && (
+                  <a href="/dashboard" className="block px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200">
+                    Dashboard
+                  </a>
+                )}
+              </nav>
+
+              {user ? (
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3 px-4">
                     {profile?.avatar_url ? (
@@ -253,7 +274,6 @@ const Header: React.FC = () => {
                     <button 
                       onClick={() => {
                         setShowMobileMenu(false);
-                        // Add settings functionality here
                       }}
                       className="w-full flex items-center space-x-2 px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200"
                     >
@@ -269,6 +289,15 @@ const Header: React.FC = () => {
                       <span>Sign Out</span>
                     </button>
                   </div>
+                </div>
+              ) : (
+                <div className="space-y-2 px-4">
+                  <button className="w-full px-3 py-2 text-white hover:bg-white/10 rounded-lg transition-all duration-200 text-left">
+                    Sign In
+                  </button>
+                  <button className="w-full px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200">
+                    Sign Up
+                  </button>
                 </div>
               )}
             </div>
