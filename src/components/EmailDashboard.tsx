@@ -96,15 +96,47 @@ const EmailDashboard: React.FC = () => {
   };
 
   const handleAccountConnect = async (accountType: string) => {
+    console.log(`🔗 Attempting to connect ${accountType} account...`);
+    
     if (accountType === 'gmail') {
       try {
+        console.log('📧 Starting Gmail connection process...');
+        
+        // Check if Gmail is configured
+        if (!isGmailConfigured()) {
+          console.warn('⚠️ Gmail API not configured - will use mock mode');
+        }
+        
         const success = await gmailService.signIn();
+        
         if (success) {
+          console.log('✅ Gmail connection successful!');
           await loadConnectedAccounts();
           setShowAddAccountModal(false);
+        } else {
+          console.error('❌ Gmail connection returned false');
+          throw new Error('Gmail authentication failed');
         }
-      } catch (error) {
-        console.error('Failed to connect Gmail:', error);
+      } catch (error: any) {
+        console.error('❌ Gmail connection failed:', error);
+        
+        // Show user-friendly error message
+        let errorMessage = 'Failed to connect Gmail account';
+        
+        if (error.message?.includes('redirect_uri_mismatch')) {
+          errorMessage = 'OAuth configuration error. Please check the Google Cloud Console setup.';
+        } else if (error.message?.includes('not configured')) {
+          errorMessage = 'Gmail API not configured. Please add your Google API credentials.';
+        } else if (error.message?.includes('popup_blocked')) {
+          errorMessage = 'Popup blocked. Please allow popups for this site and try again.';
+        } else if (error.message?.includes('access_denied')) {
+          errorMessage = 'Access denied. Please grant permission to access your Gmail account.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        // You could show this error in the UI
+        alert(`Gmail Connection Failed: ${errorMessage}`);
       }
     }
     // Other account types will be implemented in future steps
@@ -115,6 +147,8 @@ const EmailDashboard: React.FC = () => {
     if (!account) return;
 
     try {
+      console.log(`🚪 Disconnecting ${account.type} account...`);
+      
       if (account.type === 'gmail') {
         await gmailService.signOut();
       }
@@ -126,14 +160,18 @@ const EmailDashboard: React.FC = () => {
       if (selectedAccount?.id === accountId) {
         setSelectedAccount(null);
       }
+      
+      console.log('✅ Account disconnected successfully');
     } catch (error) {
-      console.error('Failed to disconnect account:', error);
+      console.error('❌ Failed to disconnect account:', error);
     }
   };
 
   const handleAccountRefresh = async (accountId: string) => {
     const account = connectedAccounts.find(acc => acc.id === accountId);
     if (!account) return;
+
+    console.log(`🔄 Refreshing ${account.type} account...`);
 
     // Update account status to syncing
     setConnectedAccounts(prev => prev.map(acc => 
@@ -153,9 +191,11 @@ const EmailDashboard: React.FC = () => {
             unreadCount: unreadCount
           } : acc
         ));
+        
+        console.log('✅ Account refreshed successfully');
       }
     } catch (error) {
-      console.error('Failed to refresh account:', error);
+      console.error('❌ Failed to refresh account:', error);
       setConnectedAccounts(prev => prev.map(acc => 
         acc.id === accountId ? { 
           ...acc, 

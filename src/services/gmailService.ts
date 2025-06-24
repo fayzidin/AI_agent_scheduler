@@ -4,7 +4,6 @@ import * as Sentry from '@sentry/react';
 
 declare global {
   interface Window {
-    gapi: any;
     google: any;
   }
 }
@@ -12,7 +11,7 @@ declare global {
 class GmailService {
   private isInitialized = false;
   private isSignedIn = false;
-  private gapi: any = null;
+  private accessToken: string = '';
   private tokenClient: any = null;
   private currentUser: any = null;
 
@@ -111,11 +110,12 @@ Team Lead`
   async initialize(): Promise<boolean> {
     if (!isGmailConfigured()) {
       console.warn('Gmail API not configured - using mock data');
+      this.isInitialized = true;
       return true; // Return true to allow mock mode
     }
 
     try {
-      console.log('🔧 Initializing Gmail API...');
+      console.log('🔧 Initializing Gmail API with Google Identity Services...');
       
       Sentry.addBreadcrumb({
         message: 'Starting Gmail API initialization',
@@ -123,39 +123,23 @@ Team Lead`
         level: 'info',
       });
 
-      // Load Google API script and Google Identity Services
-      await Promise.all([
-        this.loadGoogleAPI(),
-        this.loadGoogleIdentityServices()
-      ]);
+      // Wait for Google Identity Services to load
+      await this.waitForGoogleIdentityServices();
       
       const config = getGmailConfig();
       
-      // Initialize gapi client
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Gmail API client initialization timeout'));
-        }, 10000);
-
-        window.gapi.load('client', () => {
-          clearTimeout(timeout);
-          resolve(undefined);
-        });
-      });
-
-      // Initialize the client
-      await window.gapi.client.init({
-        apiKey: config.apiKey,
-        discoveryDocs: config.discoveryDocs
-      });
-
-      this.gapi = window.gapi;
+      if (!config.clientId) {
+        throw new Error('Missing VITE_GOOGLE_CLIENT_ID in environment variables');
+      }
 
       // Initialize Google Identity Services token client
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
         scope: config.scopes.join(' '),
-        callback: '', // Will be set dynamically
+        prompt: 'consent',
+        callback: (tokenResponse: any) => {
+          this.handleTokenResponse(tokenResponse);
+        },
         error_callback: (error: any) => {
           console.error('Gmail OAuth error:', error);
           Sentry.captureException(new Error(`Gmail OAuth error: ${JSON.stringify(error)}`), {
@@ -167,23 +151,17 @@ Team Lead`
 
       this.isInitialized = true;
       
-      // Check if we already have a valid token
-      const existingToken = this.gapi.client.getToken();
-      this.isSignedIn = existingToken && existingToken.access_token;
-      
       // Try to restore from stored session
-      if (!this.isSignedIn) {
-        this.loadStoredToken();
-      }
+      this.loadStoredToken();
       
-      console.log('✅ Gmail API initialized successfully');
+      console.log('✅ Gmail API initialized successfully with GIS');
       
       Sentry.addBreadcrumb({
         message: 'Gmail API initialized successfully',
         category: 'gmail',
         level: 'info',
         data: { 
-          hasExistingToken: !!existingToken,
+          hasStoredToken: !!this.accessToken,
           currentOrigin: window.location.origin 
         },
       });
@@ -196,15 +174,42 @@ Team Lead`
         extra: { 
           isConfigured: isGmailConfigured(),
           currentOrigin: window.location.origin,
-          userAgent: navigator.userAgent
+          userAgent: navigator.userAgent,
+          hasGoogleGlobal: !!window.google,
+          hasGoogleAccounts: !!window.google?.accounts,
+          hasOAuth2: !!window.google?.accounts?.oauth2
         },
       });
       return false;
     }
   }
 
+  private async waitForGoogleIdentityServices(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Google Identity Services script load timeout'));
+      }, 10000);
+
+      const checkGIS = () => {
+        if (window.google?.accounts?.oauth2) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          setTimeout(checkGIS, 100);
+        }
+      };
+
+      checkGIS();
+    });
+  }
+
   private handleTokenResponse(tokenResponse: any) {
     try {
+      console.log('📧 Gmail token response received:', { 
+        hasToken: !!tokenResponse.access_token,
+        hasError: !!tokenResponse.error 
+      });
+
       if (tokenResponse.error) {
         console.error('❌ Gmail token acquisition failed:', tokenResponse.error);
         
@@ -225,12 +230,10 @@ Team Lead`
         return;
       }
       
-      // Set the access token for gapi client
-      this.gapi.client.setToken({
-        access_token: tokenResponse.access_token
-      });
-      
+      // Store the access token
+      this.accessToken = tokenResponse.access_token;
       this.isSignedIn = true;
+      
       console.log('✅ Gmail access token acquired successfully');
       
       Sentry.addBreadcrumb({
@@ -274,9 +277,7 @@ Team Lead`
       
       // Check if token is still valid (with 5 minute buffer)
       if (tokenInfo.expires_at && Date.now() < (tokenInfo.expires_at - 5 * 60 * 1000)) {
-        this.gapi.client.setToken({
-          access_token: tokenInfo.access_token
-        });
+        this.accessToken = tokenInfo.access_token;
         this.isSignedIn = true;
         console.log('🔄 Restored Gmail session from storage');
         return true;
@@ -290,56 +291,6 @@ Team Lead`
       localStorage.removeItem('gmail_token');
       return false;
     }
-  }
-
-  private loadGoogleAPI(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (window.gapi) {
-        resolve();
-        return;
-      }
-
-      const timeout = setTimeout(() => {
-        reject(new Error('Google API script load timeout'));
-      }, 10000);
-
-      const script = document.createElement('script');
-      script.src = 'https://apis.google.com/js/api.js';
-      script.onload = () => {
-        clearTimeout(timeout);
-        resolve();
-      };
-      script.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error('Failed to load Google API'));
-      };
-      document.head.appendChild(script);
-    });
-  }
-
-  private loadGoogleIdentityServices(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (window.google?.accounts) {
-        resolve();
-        return;
-      }
-
-      const timeout = setTimeout(() => {
-        reject(new Error('Google Identity Services script load timeout'));
-      }, 10000);
-
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.onload = () => {
-        clearTimeout(timeout);
-        resolve();
-      };
-      script.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error('Failed to load Google Identity Services'));
-      };
-      document.head.appendChild(script);
-    });
   }
 
   async signIn(): Promise<boolean> {
@@ -366,90 +317,33 @@ Team Lead`
       return true;
     }
 
-    // Try silent authentication first
-    console.log('🤫 Attempting silent authentication...');
-    const silentSuccess = await this.attemptSilentAuth();
-    if (silentSuccess) {
-      console.log('✅ Silent Gmail authentication successful');
-      return true;
-    }
-
-    // If silent auth fails, fall back to interactive auth
-    console.log('👤 Falling back to interactive authentication...');
-    const interactiveSuccess = await this.attemptInteractiveAuth();
-    if (interactiveSuccess) {
-      console.log('✅ Interactive Gmail authentication successful');
-      return true;
-    }
-
-    throw new Error('Gmail authentication failed');
+    // If no stored token, request new one
+    console.log('👤 Requesting new Gmail access token...');
+    return this.requestAccessToken();
   }
 
-  private async attemptSilentAuth(): Promise<boolean> {
-    return new Promise((resolve) => {
+  private async requestAccessToken(): Promise<boolean> {
+    return new Promise((resolve, reject) => {
       try {
         if (!this.tokenClient) {
-          console.log('❌ Token client not available for silent auth');
-          resolve(false);
+          console.error('❌ Token client not available');
+          reject(new Error('Gmail token client not initialized'));
           return;
         }
 
-        console.log('🤫 Attempting silent Gmail authentication...');
+        console.log('🔑 Requesting Gmail access token...');
 
-        // Set up callback for this specific request
+        // Set up one-time callback for this request
+        const originalCallback = this.tokenClient.callback;
+        
         this.tokenClient.callback = (tokenResponse: any) => {
           try {
+            // Call the original handler
             this.handleTokenResponse(tokenResponse);
             
+            // Resolve based on success/failure
             if (tokenResponse.error) {
-              console.log('❌ Silent auth failed:', tokenResponse.error);
-              resolve(false);
-            } else {
-              console.log('✅ Silent auth successful!');
-              resolve(true);
-            }
-          } catch (error) {
-            console.error('❌ Error in silent auth callback:', error);
-            resolve(false);
-          }
-        };
-
-        // Request access token silently (no user interaction)
-        this.tokenClient.requestAccessToken({ 
-          prompt: 'none' // This is the key - no user prompt
-        });
-
-        // Set a timeout for silent auth
-        setTimeout(() => {
-          console.log('⏰ Silent auth timeout');
-          resolve(false);
-        }, 5000);
-
-      } catch (error) {
-        console.error('❌ Silent auth attempt failed:', error);
-        resolve(false);
-      }
-    });
-  }
-
-  private async attemptInteractiveAuth(): Promise<boolean> {
-    return new Promise((resolve) => {
-      try {
-        if (!this.tokenClient) {
-          console.error('❌ Token client not available for interactive auth');
-          resolve(false);
-          return;
-        }
-
-        console.log('👤 Attempting interactive Gmail authentication...');
-
-        // Set up callback for this specific request
-        this.tokenClient.callback = (tokenResponse: any) => {
-          try {
-            this.handleTokenResponse(tokenResponse);
-            
-            if (tokenResponse.error) {
-              console.error('❌ Interactive auth failed:', tokenResponse.error);
+              console.error('❌ Gmail auth failed:', tokenResponse.error);
               
               // Provide helpful error messages
               if (tokenResponse.error === 'redirect_uri_mismatch') {
@@ -470,26 +364,27 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
                 `);
               }
               
-              resolve(false);
+              reject(new Error(tokenResponse.error));
             } else {
-              console.log('✅ Interactive auth successful!');
+              console.log('✅ Gmail authentication successful!');
               resolve(true);
             }
+            
+            // Restore original callback
+            this.tokenClient.callback = originalCallback;
           } catch (error) {
-            console.error('❌ Error in interactive auth callback:', error);
-            resolve(false);
+            console.error('❌ Error in Gmail auth callback:', error);
+            this.tokenClient.callback = originalCallback;
+            reject(error);
           }
         };
 
-        // Request access token with user interaction (popup)
-        this.tokenClient.requestAccessToken({ 
-          prompt: 'consent', // Show consent screen for interactive auth
-          access_type: 'offline' // Request offline access
-        });
+        // Request access token
+        this.tokenClient.requestAccessToken();
 
       } catch (error) {
         console.error('❌ Failed to request Gmail access token:', error);
-        resolve(false);
+        reject(error);
       }
     });
   }
@@ -497,23 +392,22 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
   async signOut(): Promise<void> {
     if (!this.isInitialized && !isGmailConfigured()) {
       this.isSignedIn = false;
+      this.accessToken = '';
       return;
     }
 
     try {
       console.log('🚪 Signing out of Gmail...');
       
-      if (this.gapi?.client) {
-        const token = this.gapi.client.getToken();
-        if (token && token.access_token) {
-          window.google.accounts.oauth2.revoke(token.access_token);
-          this.gapi.client.setToken(null);
-        }
+      if (this.accessToken && window.google?.accounts?.oauth2) {
+        // Revoke the access token
+        window.google.accounts.oauth2.revoke(this.accessToken);
       }
       
       // Clear stored session
       localStorage.removeItem('gmail_token');
       this.isSignedIn = false;
+      this.accessToken = '';
       console.log('✅ Gmail signed out successfully');
     } catch (error) {
       console.error('❌ Gmail sign-out failed:', error);
@@ -527,14 +421,17 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
 
     if (!this.isInitialized) return false;
     
-    const token = this.gapi?.client?.getToken();
-    const hasValidToken = this.isSignedIn && token && token.access_token;
+    const hasValidToken = this.isSignedIn && this.accessToken;
     
-    if (!hasValidToken && this.gapi?.client) {
+    if (!hasValidToken) {
       return this.loadStoredToken();
     }
     
     return hasValidToken;
+  }
+
+  getAccessToken(): string {
+    return this.accessToken || localStorage.getItem('gmail_token') || '';
   }
 
   async getUserInfo(): Promise<any> {
@@ -543,11 +440,18 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
     }
 
     try {
-      if (isGmailConfigured() && this.gapi?.client) {
-        const response = await this.gapi.client.request({
-          path: 'https://www.googleapis.com/oauth2/v2/userinfo'
+      if (isGmailConfigured() && this.accessToken) {
+        const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`
+          }
         });
-        return response.result;
+
+        if (!response.ok) {
+          throw new Error(`Failed to get user info: ${response.statusText}`);
+        }
+
+        return await response.json();
       } else {
         // Mock user info
         return {
@@ -568,12 +472,11 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
     }
 
     try {
-      if (isGmailConfigured() && this.gapi?.client) {
+      if (isGmailConfigured() && this.accessToken) {
         console.log('📧 Fetching messages from Gmail API...');
         
-        // Real Gmail API implementation
+        // Build query string
         let query = '';
-        
         if (filter.isRead === false) query += 'is:unread ';
         if (filter.isStarred) query += 'is:starred ';
         if (filter.isImportant) query += 'is:important ';
@@ -582,26 +485,39 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
         if (filter.subject) query += `subject:${filter.subject} `;
         if (filter.query) query += filter.query;
 
-        const response = await this.gapi.client.gmail.users.messages.list({
-          userId: 'me',
+        const params = new URLSearchParams({
           q: query.trim(),
-          maxResults: maxResults
+          maxResults: maxResults.toString()
         });
 
-        const messages = response.result.messages || [];
+        const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages?${params}`, {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Gmail API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const messages = data.messages || [];
         const detailedMessages: EmailMessage[] = [];
 
-        // Get detailed info for each message
-        for (const message of messages.slice(0, 10)) { // Limit to 10 for demo
+        // Get detailed info for each message (limit to 10 for demo)
+        for (const message of messages.slice(0, 10)) {
           try {
-            const detailResponse = await this.gapi.client.gmail.users.messages.get({
-              userId: 'me',
-              id: message.id,
-              format: 'full'
+            const detailResponse = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${message.id}?format=full`, {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`
+              }
             });
 
-            const emailMessage = this.parseGmailMessage(detailResponse.result);
-            detailedMessages.push(emailMessage);
+            if (detailResponse.ok) {
+              const detailData = await detailResponse.json();
+              const emailMessage = this.parseGmailMessage(detailData);
+              detailedMessages.push(emailMessage);
+            }
           } catch (error) {
             console.error('❌ Failed to get message details:', error);
           }
@@ -701,13 +617,19 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
     }
 
     try {
-      if (isGmailConfigured() && this.gapi?.client) {
-        await this.gapi.client.gmail.users.messages.modify({
-          userId: 'me',
-          id: messageId,
-          removeLabelIds: ['UNREAD']
+      if (isGmailConfigured() && this.accessToken) {
+        const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            removeLabelIds: ['UNREAD']
+          })
         });
-        return true;
+
+        return response.ok;
       } else {
         // Mock implementation
         const email = this.mockEmails.find(e => e.id === messageId);
@@ -729,17 +651,23 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
     }
 
     try {
-      if (isGmailConfigured() && this.gapi?.client) {
+      if (isGmailConfigured() && this.accessToken) {
         const labelIds = starred ? ['STARRED'] : [];
         const removeLabelIds = starred ? [] : ['STARRED'];
         
-        await this.gapi.client.gmail.users.messages.modify({
-          userId: 'me',
-          id: messageId,
-          addLabelIds: labelIds,
-          removeLabelIds: removeLabelIds
+        const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            addLabelIds: labelIds,
+            removeLabelIds: removeLabelIds
+          })
         });
-        return true;
+
+        return response.ok;
       } else {
         // Mock implementation
         const email = this.mockEmails.find(e => e.id === messageId);
@@ -765,13 +693,18 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
     }
 
     try {
-      if (isGmailConfigured() && this.gapi?.client) {
-        const response = await this.gapi.client.gmail.users.messages.list({
-          userId: 'me',
-          q: 'is:unread',
-          maxResults: 1
+      if (isGmailConfigured() && this.accessToken) {
+        const response = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?q=is:unread&maxResults=1', {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`
+          }
         });
-        return response.result.resultSizeEstimate || 0;
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.resultSizeEstimate || 0;
+        }
+        return 0;
       } else {
         // Mock implementation
         return this.mockEmails.filter(email => !email.isRead).length;
