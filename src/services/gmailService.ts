@@ -132,10 +132,10 @@ Team Lead`
         throw new Error('Missing VITE_GOOGLE_CLIENT_ID in environment variables');
       }
 
-      // Initialize Google Identity Services token client
+      // Initialize Google Identity Services token client with reduced scopes
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
-        scope: config.scopes.join(' '),
+        scope: config.scopes.join(' '), // Using reduced scopes
         prompt: 'consent',
         callback: (tokenResponse: any) => {
           this.handleTokenResponse(tokenResponse);
@@ -154,15 +154,16 @@ Team Lead`
       // Try to restore from stored session
       this.loadStoredToken();
       
-      console.log('✅ Gmail API initialized successfully with GIS');
+      console.log('✅ Gmail API initialized successfully with GIS (reduced scopes)');
       
       Sentry.addBreadcrumb({
-        message: 'Gmail API initialized successfully',
+        message: 'Gmail API initialized successfully with reduced scopes',
         category: 'gmail',
         level: 'info',
         data: { 
           hasStoredToken: !!this.accessToken,
-          currentOrigin: window.location.origin 
+          currentOrigin: window.location.origin,
+          scopes: config.scopes
         },
       });
       
@@ -214,7 +215,9 @@ Team Lead`
         console.error('❌ Gmail token acquisition failed:', tokenResponse.error);
         
         let errorMessage = `Token acquisition failed: ${tokenResponse.error}`;
-        if (tokenResponse.error === 'redirect_uri_mismatch') {
+        if (tokenResponse.error === 'access_denied') {
+          errorMessage = 'Access denied. Please grant permission to access your Gmail account. Note: Some scopes may require app verification.';
+        } else if (tokenResponse.error === 'redirect_uri_mismatch') {
           errorMessage = `OAuth configuration error: The current domain (${window.location.origin}) is not authorized in Google Cloud Console. Please add this domain to your OAuth client's authorized JavaScript origins.`;
         }
         
@@ -234,10 +237,10 @@ Team Lead`
       this.accessToken = tokenResponse.access_token;
       this.isSignedIn = true;
       
-      console.log('✅ Gmail access token acquired successfully');
+      console.log('✅ Gmail access token acquired successfully (read-only access)');
       
       Sentry.addBreadcrumb({
-        message: 'Gmail token acquired successfully',
+        message: 'Gmail token acquired successfully with read-only access',
         category: 'gmail',
         level: 'info',
       });
@@ -318,7 +321,7 @@ Team Lead`
     }
 
     // If no stored token, request new one
-    console.log('👤 Requesting new Gmail access token...');
+    console.log('👤 Requesting new Gmail access token (read-only)...');
     return this.requestAccessToken();
   }
 
@@ -331,7 +334,7 @@ Team Lead`
           return;
         }
 
-        console.log('🔑 Requesting Gmail access token...');
+        console.log('🔑 Requesting Gmail access token (read-only scopes)...');
 
         // Set up one-time callback for this request
         const originalCallback = this.tokenClient.callback;
@@ -346,7 +349,23 @@ Team Lead`
               console.error('❌ Gmail auth failed:', tokenResponse.error);
               
               // Provide helpful error messages
-              if (tokenResponse.error === 'redirect_uri_mismatch') {
+              if (tokenResponse.error === 'access_denied') {
+                console.error(`
+🚨 Access Denied:
+
+This can happen when:
+1. User denied permission
+2. App requires verification for sensitive scopes
+3. OAuth consent screen not properly configured
+
+Current scopes (read-only):
+- gmail.readonly
+- userinfo.email
+- calendar.readonly
+
+These scopes should not require verification.
+                `);
+              } else if (tokenResponse.error === 'redirect_uri_mismatch') {
                 console.error(`
 🚨 OAuth Configuration Error:
 
@@ -359,14 +378,12 @@ To fix this:
 4. Add this URL to "Authorized JavaScript origins":
    ${window.location.origin}
 5. Save and wait 5-10 minutes for changes to propagate
-
-See GOOGLE_OAUTH_SETUP.md for detailed instructions.
                 `);
               }
               
               reject(new Error(tokenResponse.error));
             } else {
-              console.log('✅ Gmail authentication successful!');
+              console.log('✅ Gmail authentication successful (read-only access)!');
               resolve(true);
             }
             
@@ -473,7 +490,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
 
     try {
       if (isGmailConfigured() && this.accessToken) {
-        console.log('📧 Fetching messages from Gmail API...');
+        console.log('📧 Fetching messages from Gmail API (read-only)...');
         
         // Build query string
         let query = '';
@@ -523,7 +540,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           }
         }
 
-        console.log(`✅ Fetched ${detailedMessages.length} messages from Gmail`);
+        console.log(`✅ Fetched ${detailedMessages.length} messages from Gmail (read-only)`);
         return detailedMessages;
       } else {
         // Mock implementation
@@ -611,80 +628,15 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
     };
   }
 
+  // Note: markAsRead and starMessage are removed since we only have read-only access
   async markAsRead(messageId: string): Promise<boolean> {
-    if (!this.isConnected()) {
-      throw new Error('Gmail not connected');
-    }
-
-    try {
-      if (isGmailConfigured() && this.accessToken) {
-        const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            removeLabelIds: ['UNREAD']
-          })
-        });
-
-        return response.ok;
-      } else {
-        // Mock implementation
-        const email = this.mockEmails.find(e => e.id === messageId);
-        if (email) {
-          email.isRead = true;
-          email.labels = email.labels.filter(label => label !== 'UNREAD');
-        }
-        return true;
-      }
-    } catch (error) {
-      console.error('❌ Failed to mark message as read:', error);
-      return false;
-    }
+    console.warn('⚠️ markAsRead not available with read-only Gmail access');
+    return false;
   }
 
   async starMessage(messageId: string, starred: boolean = true): Promise<boolean> {
-    if (!this.isConnected()) {
-      throw new Error('Gmail not connected');
-    }
-
-    try {
-      if (isGmailConfigured() && this.accessToken) {
-        const labelIds = starred ? ['STARRED'] : [];
-        const removeLabelIds = starred ? [] : ['STARRED'];
-        
-        const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            addLabelIds: labelIds,
-            removeLabelIds: removeLabelIds
-          })
-        });
-
-        return response.ok;
-      } else {
-        // Mock implementation
-        const email = this.mockEmails.find(e => e.id === messageId);
-        if (email) {
-          email.isStarred = starred;
-          if (starred && !email.labels.includes('STARRED')) {
-            email.labels.push('STARRED');
-          } else if (!starred) {
-            email.labels = email.labels.filter(label => label !== 'STARRED');
-          }
-        }
-        return true;
-      }
-    } catch (error) {
-      console.error('❌ Failed to star/unstar message:', error);
-      return false;
-    }
+    console.warn('⚠️ starMessage not available with read-only Gmail access');
+    return false;
   }
 
   async getUnreadCount(): Promise<number> {

@@ -30,6 +30,7 @@ interface EmailProvider {
   authMethod: 'oauth2' | 'imap' | 'both';
   securityLevel: 'high' | 'medium';
   setupComplexity: 'easy' | 'medium' | 'advanced';
+  accessLevel: 'read_only' | 'full_access';
 }
 
 const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountConnect }) => {
@@ -43,18 +44,19 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
       id: 'gmail',
       name: 'Gmail',
       icon: '📧',
-      description: 'Connect your Google Gmail account with full OAuth 2.0 security',
+      description: 'Connect your Google Gmail account with read-only access (no verification required)',
       features: [
-        'Real-time email sync',
+        'Read emails and metadata',
         'AI meeting detection',
-        'Calendar integration',
-        'Automatic scheduling',
-        'Contact management'
+        'Contact extraction',
+        'Email parsing',
+        'Unread count tracking'
       ],
       status: isGmailConfigured() ? 'configured' : 'not_configured',
       authMethod: 'oauth2',
       securityLevel: 'high',
-      setupComplexity: 'easy'
+      setupComplexity: 'easy',
+      accessLevel: 'read_only'
     },
     {
       id: 'outlook',
@@ -71,7 +73,8 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
       status: 'coming_soon',
       authMethod: 'oauth2',
       securityLevel: 'high',
-      setupComplexity: 'easy'
+      setupComplexity: 'easy',
+      accessLevel: 'read_only'
     },
     {
       id: 'yahoo',
@@ -87,7 +90,8 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
       status: 'coming_soon',
       authMethod: 'both',
       securityLevel: 'medium',
-      setupComplexity: 'medium'
+      setupComplexity: 'medium',
+      accessLevel: 'read_only'
     },
     {
       id: 'imap',
@@ -103,7 +107,8 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
       status: 'coming_soon',
       authMethod: 'imap',
       securityLevel: 'medium',
-      setupComplexity: 'advanced'
+      setupComplexity: 'advanced',
+      accessLevel: 'read_only'
     }
   ];
 
@@ -125,9 +130,27 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
     setConnectionError('');
 
     try {
+      console.log(`🔗 Connecting to ${provider.name} with ${provider.accessLevel} access...`);
       await onAccountConnect(providerId);
+      console.log(`✅ Successfully connected to ${provider.name}!`);
     } catch (error: any) {
-      setConnectionError(error.message || `Failed to connect ${provider.name}`);
+      console.error(`❌ Failed to connect to ${provider.name}:`, error);
+      
+      let errorMessage = error.message || `Failed to connect ${provider.name}`;
+      
+      // Provide specific error messages for common OAuth issues
+      if (error.message?.includes('access_denied')) {
+        errorMessage = `Access denied. This may happen if:
+        • You denied permission in the OAuth popup
+        • The app requires verification for some scopes
+        • Try again and make sure to grant all requested permissions`;
+      } else if (error.message?.includes('redirect_uri_mismatch')) {
+        errorMessage = 'OAuth configuration error. Please check the setup guide for instructions on configuring Google Cloud Console.';
+      } else if (error.message?.includes('not configured')) {
+        errorMessage = `${provider.name} API not configured. Please add your Google API credentials to environment variables.`;
+      }
+      
+      setConnectionError(errorMessage);
     } finally {
       setIsConnecting(false);
     }
@@ -159,6 +182,20 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
       default:
         return null;
     }
+  };
+
+  const getAccessLevelBadge = (accessLevel: EmailProvider['accessLevel']) => {
+    return accessLevel === 'read_only' ? (
+      <span className="inline-flex items-center px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs">
+        <Eye className="w-3 h-3 mr-1" />
+        Read Only
+      </span>
+    ) : (
+      <span className="inline-flex items-center px-2 py-1 bg-purple-500/20 text-purple-300 rounded text-xs">
+        <Lock className="w-3 h-3 mr-1" />
+        Full Access
+      </span>
+    );
   };
 
   const getSecurityIcon = (level: EmailProvider['securityLevel']) => {
@@ -202,10 +239,10 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
             <div className="flex items-start space-x-3">
               <Shield className="w-5 h-5 text-blue-400 mt-0.5" />
               <div>
-                <h3 className="text-blue-300 font-semibold text-sm">Secure Connection</h3>
+                <h3 className="text-blue-300 font-semibold text-sm">Secure Read-Only Access</h3>
                 <p className="text-blue-200 text-sm mt-1">
-                  We use OAuth 2.0 and industry-standard encryption to securely connect your accounts. 
-                  We never store your passwords and only access the data you explicitly authorize.
+                  We use OAuth 2.0 with read-only permissions to securely connect your accounts. 
+                  We can only read your emails - we cannot send, delete, or modify anything.
                 </p>
               </div>
             </div>
@@ -239,6 +276,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                       <div className="flex items-center space-x-3 mb-2">
                         <h4 className="text-xl font-bold text-white">{provider.name}</h4>
                         {getStatusBadge(provider.status)}
+                        {getAccessLevelBadge(provider.accessLevel)}
                       </div>
                       
                       <p className="text-indigo-200 mb-3">{provider.description}</p>
@@ -306,7 +344,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                           <>
                             <Mail className="w-4 h-4" />
                             <span>
-                              {provider.status === 'configured' ? 'Connect' :
+                              {provider.status === 'configured' ? 'Connect (Read-Only)' :
                                provider.status === 'not_configured' ? 'Setup Required' :
                                'Coming Soon'}
                             </span>
@@ -316,6 +354,25 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                     )}
                   </div>
                 </div>
+
+                {/* Read-Only Notice for Gmail */}
+                {selectedProvider === provider.id && provider.id === 'gmail' && provider.status === 'configured' && (
+                  <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <div className="flex items-start space-x-3">
+                      <Info className="w-5 h-5 text-blue-400 mt-0.5" />
+                      <div>
+                        <h4 className="text-blue-300 font-semibold text-sm">Read-Only Access</h4>
+                        <p className="text-blue-200 text-sm mt-1">
+                          This connection uses read-only permissions to avoid Google's app verification requirements. 
+                          You can read emails and extract meeting information, but cannot modify emails or send messages.
+                        </p>
+                        <div className="mt-2 text-xs text-blue-300">
+                          <strong>Permissions:</strong> gmail.readonly, userinfo.email, calendar.readonly
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Setup Instructions for Not Configured */}
                 {selectedProvider === provider.id && provider.status === 'not_configured' && (
@@ -375,7 +432,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                 <AlertCircle className="w-5 h-5 text-red-400 mt-0.5" />
                 <div>
                   <h4 className="text-red-300 font-semibold text-sm">Connection Error</h4>
-                  <p className="text-red-200 text-sm mt-1">{connectionError}</p>
+                  <p className="text-red-200 text-sm mt-1 whitespace-pre-line">{connectionError}</p>
                 </div>
               </div>
             </div>
@@ -409,7 +466,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
         <div className="p-6 border-t border-white/10 bg-white/5">
           <div className="flex items-center justify-between">
             <div className="text-sm text-indigo-300">
-              <p>🔒 Your data is encrypted and secure. We never store passwords.</p>
+              <p>🔒 Your data is encrypted and secure. We only request read-only access.</p>
             </div>
             <div className="flex space-x-3">
               <button
