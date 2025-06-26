@@ -25,7 +25,7 @@
 */
 
 -- Enable Row Level Security
-ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
+--ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
 
 -- Create profiles table
 CREATE TABLE IF NOT EXISTS public.profiles (
