@@ -6,7 +6,6 @@ export interface GmailConfig {
 }
 
 export const getGmailConfig = (): GmailConfig => {
-  // Reuse Google Calendar config for Gmail API
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
 
@@ -19,13 +18,14 @@ export const getGmailConfig = (): GmailConfig => {
     apiKey: apiKey || '',
     discoveryDocs: [
       'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest',
-      'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'
+      'https://www.googleapis.com/discovery/v1/apis/oauth2/v2/rest'
     ],
-    // ONLY read-only scopes to avoid verification requirements
+    // Updated scopes for full Gmail access
     scopes: [
-      'https://www.googleapis.com/auth/gmail.readonly', // Read-only Gmail access
-      'https://www.googleapis.com/auth/userinfo.email', // Basic email info
-      'https://www.googleapis.com/auth/calendar.readonly' // Read-only calendar access
+      'https://www.googleapis.com/auth/gmail.readonly', // Read Gmail emails
+      'https://www.googleapis.com/auth/gmail.modify', // Modify Gmail emails (mark as read, star)
+      'https://www.googleapis.com/auth/userinfo.email', // Get user email
+      'https://www.googleapis.com/auth/userinfo.profile' // Get user profile info
     ]
   };
 };

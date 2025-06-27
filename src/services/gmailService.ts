@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/react';
 declare global {
   interface Window {
     google: any;
+    gapi: any;
   }
 }
 
@@ -15,7 +16,7 @@ class GmailService {
   private tokenClient: any = null;
   private currentUser: any = null;
 
-  // Mock data for development
+  // Mock data for development (only used when API is not configured)
   private mockEmails: EmailMessage[] = [
     {
       id: '1',
@@ -23,7 +24,7 @@ class GmailService {
       subject: 'Meeting Request - Project Discussion',
       from: { name: 'John Smith', email: 'john.smith@techcorp.com' },
       to: [{ name: 'You', email: 'you@company.com' }],
-      date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+      date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       body: {
         text: `Hi there,
 
@@ -48,62 +49,6 @@ john.smith@techcorp.com`
       snippet: 'I wanted to schedule a meeting with you and the team at TechCorp Inc. to discuss our upcoming project...',
       providerId: 'gmail',
       roomId: 'gmail-room-1'
-    },
-    {
-      id: '2',
-      threadId: 'thread-2',
-      subject: 'Re: Quarterly Review Meeting',
-      from: { name: 'Sarah Johnson', email: 'sarah.j@microsoft.com' },
-      to: [{ name: 'You', email: 'you@company.com' }],
-      date: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
-      body: {
-        text: `Hi,
-
-Thanks for your email about the quarterly review. I need to reschedule our meeting that was planned for tomorrow at 3:00 PM.
-
-Can we move it to next week instead? I'm available on Tuesday, January 23rd at 10:00 AM or Wednesday, January 24th at 2:00 PM.
-
-Let me know what works better for you.
-
-Best,
-Sarah Johnson
-Product Manager
-Microsoft Corporation`
-      },
-      labels: ['INBOX'],
-      isRead: true,
-      isStarred: true,
-      isImportant: false,
-      snippet: 'I need to reschedule our meeting that was planned for tomorrow at 3:00 PM...',
-      providerId: 'gmail',
-      roomId: 'gmail-room-1'
-    },
-    {
-      id: '3',
-      threadId: 'thread-3',
-      subject: 'Cancellation: Friday Team Standup',
-      from: { name: 'Team Lead', email: 'lead@company.com' },
-      to: [{ name: 'You', email: 'you@company.com' }],
-      date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
-      body: {
-        text: `Team,
-
-I need to cancel our Friday team standup meeting scheduled for January 20th, 2024 at 10:00 AM due to an emergency.
-
-We'll reschedule for next week. I'll send out a new meeting invite once I have more clarity on everyone's availability.
-
-Thanks for understanding.
-
-Best,
-Team Lead`
-      },
-      labels: ['INBOX'],
-      isRead: true,
-      isStarred: false,
-      isImportant: false,
-      snippet: 'I need to cancel our Friday team standup meeting scheduled for January 20th...',
-      providerId: 'gmail',
-      roomId: 'gmail-room-1'
     }
   ];
 
@@ -111,11 +56,11 @@ Team Lead`
     if (!isGmailConfigured()) {
       console.warn('Gmail API not configured - using mock data');
       this.isInitialized = true;
-      return true; // Return true to allow mock mode
+      return true;
     }
 
     try {
-      console.log('🔧 Initializing Gmail API with Google Identity Services...');
+      console.log('🔧 Initializing Gmail API with Google Identity Services and GAPI...');
       
       Sentry.addBreadcrumb({
         message: 'Starting Gmail API initialization',
@@ -123,8 +68,11 @@ Team Lead`
         level: 'info',
       });
 
-      // Wait for Google Identity Services to load
-      await this.waitForGoogleIdentityServices();
+      // Load both Google Identity Services and GAPI
+      await Promise.all([
+        this.waitForGoogleIdentityServices(),
+        this.loadGoogleAPI()
+      ]);
       
       const config = getGmailConfig();
       
@@ -132,10 +80,31 @@ Team Lead`
         throw new Error('Missing VITE_GOOGLE_CLIENT_ID in environment variables');
       }
 
-      // Initialize Google Identity Services token client with reduced scopes
+      // Initialize GAPI client first
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('GAPI client initialization timeout'));
+        }, 10000);
+
+        window.gapi.load('client', async () => {
+          try {
+            await window.gapi.client.init({
+              apiKey: config.apiKey,
+              discoveryDocs: config.discoveryDocs
+            });
+            clearTimeout(timeout);
+            resolve(undefined);
+          } catch (error) {
+            clearTimeout(timeout);
+            reject(error);
+          }
+        });
+      });
+
+      // Initialize Google Identity Services token client
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
-        scope: config.scopes.join(' '), // Using reduced scopes
+        scope: config.scopes.join(' '),
         prompt: 'consent',
         callback: (tokenResponse: any) => {
           this.handleTokenResponse(tokenResponse);
@@ -154,10 +123,10 @@ Team Lead`
       // Try to restore from stored session
       this.loadStoredToken();
       
-      console.log('✅ Gmail API initialized successfully with GIS (reduced scopes)');
+      console.log('✅ Gmail API initialized successfully with GAPI + GIS');
       
       Sentry.addBreadcrumb({
-        message: 'Gmail API initialized successfully with reduced scopes',
+        message: 'Gmail API initialized successfully',
         category: 'gmail',
         level: 'info',
         data: { 
@@ -177,12 +146,36 @@ Team Lead`
           currentOrigin: window.location.origin,
           userAgent: navigator.userAgent,
           hasGoogleGlobal: !!window.google,
-          hasGoogleAccounts: !!window.google?.accounts,
-          hasOAuth2: !!window.google?.accounts?.oauth2
+          hasGapi: !!window.gapi
         },
       });
       return false;
     }
+  }
+
+  private async loadGoogleAPI(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (window.gapi) {
+        resolve();
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        reject(new Error('Google API script load timeout'));
+      }, 10000);
+
+      const script = document.createElement('script');
+      script.src = 'https://apis.google.com/js/api.js';
+      script.onload = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('Failed to load Google API'));
+      };
+      document.head.appendChild(script);
+    });
   }
 
   private async waitForGoogleIdentityServices(): Promise<void> {
@@ -216,7 +209,7 @@ Team Lead`
         
         let errorMessage = `Token acquisition failed: ${tokenResponse.error}`;
         if (tokenResponse.error === 'access_denied') {
-          errorMessage = 'Access denied. Please grant permission to access your Gmail account. Note: Some scopes may require app verification.';
+          errorMessage = 'Access denied. Please grant permission to access your Gmail account.';
         } else if (tokenResponse.error === 'redirect_uri_mismatch') {
           errorMessage = `OAuth configuration error: The current domain (${window.location.origin}) is not authorized in Google Cloud Console. Please add this domain to your OAuth client's authorized JavaScript origins.`;
         }
@@ -233,14 +226,17 @@ Team Lead`
         return;
       }
       
-      // Store the access token
+      // Store the access token and set it in GAPI client
       this.accessToken = tokenResponse.access_token;
+      window.gapi.client.setToken({
+        access_token: tokenResponse.access_token
+      });
       this.isSignedIn = true;
       
-      console.log('✅ Gmail access token acquired successfully (read-only access)');
+      console.log('✅ Gmail access token acquired successfully');
       
       Sentry.addBreadcrumb({
-        message: 'Gmail token acquired successfully with read-only access',
+        message: 'Gmail token acquired successfully',
         category: 'gmail',
         level: 'info',
       });
@@ -281,6 +277,9 @@ Team Lead`
       // Check if token is still valid (with 5 minute buffer)
       if (tokenInfo.expires_at && Date.now() < (tokenInfo.expires_at - 5 * 60 * 1000)) {
         this.accessToken = tokenInfo.access_token;
+        window.gapi.client.setToken({
+          access_token: tokenInfo.access_token
+        });
         this.isSignedIn = true;
         console.log('🔄 Restored Gmail session from storage');
         return true;
@@ -301,7 +300,7 @@ Team Lead`
     
     if (!isGmailConfigured()) {
       console.log('⚠️ Gmail API not configured - using mock mode');
-      this.isSignedIn = true; // Allow mock mode
+      this.isSignedIn = true;
       return true;
     }
 
@@ -321,7 +320,7 @@ Team Lead`
     }
 
     // If no stored token, request new one
-    console.log('👤 Requesting new Gmail access token (read-only)...');
+    console.log('👤 Requesting new Gmail access token...');
     return this.requestAccessToken();
   }
 
@@ -334,7 +333,7 @@ Team Lead`
           return;
         }
 
-        console.log('🔑 Requesting Gmail access token (read-only scopes)...');
+        console.log('🔑 Requesting Gmail access token...');
 
         // Set up one-time callback for this request
         const originalCallback = this.tokenClient.callback;
@@ -347,43 +346,9 @@ Team Lead`
             // Resolve based on success/failure
             if (tokenResponse.error) {
               console.error('❌ Gmail auth failed:', tokenResponse.error);
-              
-              // Provide helpful error messages
-              if (tokenResponse.error === 'access_denied') {
-                console.error(`
-🚨 Access Denied:
-
-This can happen when:
-1. User denied permission
-2. App requires verification for sensitive scopes
-3. OAuth consent screen not properly configured
-
-Current scopes (read-only):
-- gmail.readonly
-- userinfo.email
-- calendar.readonly
-
-These scopes should not require verification.
-                `);
-              } else if (tokenResponse.error === 'redirect_uri_mismatch') {
-                console.error(`
-🚨 OAuth Configuration Error:
-
-The current domain (${window.location.origin}) is not authorized in your Google Cloud Console.
-
-To fix this:
-1. Go to https://console.cloud.google.com/
-2. Navigate to APIs & Services → Credentials
-3. Edit your OAuth 2.0 Client ID
-4. Add this URL to "Authorized JavaScript origins":
-   ${window.location.origin}
-5. Save and wait 5-10 minutes for changes to propagate
-                `);
-              }
-              
               reject(new Error(tokenResponse.error));
             } else {
-              console.log('✅ Gmail authentication successful (read-only access)!');
+              console.log('✅ Gmail authentication successful!');
               resolve(true);
             }
             
@@ -421,6 +386,10 @@ To fix this:
         window.google.accounts.oauth2.revoke(this.accessToken);
       }
       
+      if (window.gapi?.client) {
+        window.gapi.client.setToken(null);
+      }
+      
       // Clear stored session
       localStorage.removeItem('gmail_token');
       this.isSignedIn = false;
@@ -448,7 +417,7 @@ To fix this:
   }
 
   getAccessToken(): string {
-    return this.accessToken || localStorage.getItem('gmail_token') || '';
+    return this.accessToken || '';
   }
 
   async getUserInfo(): Promise<any> {
@@ -457,27 +426,24 @@ To fix this:
     }
 
     try {
-      if (isGmailConfigured() && this.accessToken) {
-        // Use JSONP approach to avoid CORS issues
-        console.log('📧 Getting Gmail user info with CORS workaround...');
+      if (isGmailConfigured() && this.accessToken && window.gapi?.client) {
+        console.log('📧 Getting Gmail user info using GAPI client...');
         
-        // Try using Google's People API instead of userinfo endpoint
-        const response = await this.makeGoogleAPIRequest(
-          'https://people.googleapis.com/v1/people/me?personFields=names,emailAddresses,photos'
-        );
-
-        if (response) {
-          // Transform People API response to match expected format
+        // Use GAPI client to get user info (avoids CORS issues)
+        await window.gapi.client.load('oauth2', 'v2');
+        const response = await window.gapi.client.oauth2.userinfo.get();
+        
+        if (response.result) {
           const userInfo = {
-            email: response.emailAddresses?.[0]?.value || 'demo@gmail.com',
-            name: response.names?.[0]?.displayName || 'Demo User',
-            picture: response.photos?.[0]?.url || 'https://via.placeholder.com/40'
+            email: response.result.email || 'demo@gmail.com',
+            name: response.result.name || response.result.email || 'Demo User',
+            picture: response.result.picture || 'https://via.placeholder.com/40'
           };
           
-          console.log('✅ Gmail user info retrieved successfully');
+          console.log('✅ Gmail user info retrieved successfully via GAPI');
           return userInfo;
         } else {
-          throw new Error('Failed to get user info from People API');
+          throw new Error('No user info in response');
         }
       } else {
         // Mock user info
@@ -501,35 +467,17 @@ To fix this:
     }
   }
 
-  private async makeGoogleAPIRequest(url: string): Promise<any> {
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Google API request failed:', error);
-      throw error;
-    }
-  }
-
   async getMessages(filter: EmailFilter = {}, maxResults: number = 50): Promise<EmailMessage[]> {
     if (!this.isConnected()) {
       throw new Error('Gmail not connected');
     }
 
     try {
-      if (isGmailConfigured() && this.accessToken) {
-        console.log('📧 Fetching messages from Gmail API (read-only)...');
+      if (isGmailConfigured() && this.accessToken && window.gapi?.client) {
+        console.log('📧 Fetching messages from Gmail API...');
+        
+        // Load Gmail API
+        await window.gapi.client.load('gmail', 'v1');
         
         // Build query string
         let query = '';
@@ -541,27 +489,27 @@ To fix this:
         if (filter.subject) query += `subject:${filter.subject} `;
         if (filter.query) query += filter.query;
 
-        const params = new URLSearchParams({
+        // Get message list
+        const listResponse = await window.gapi.client.gmail.users.messages.list({
+          userId: 'me',
           q: query.trim(),
-          maxResults: Math.min(maxResults, 10).toString() // Limit to 10 for demo
+          maxResults: Math.min(maxResults, 10) // Limit to 10 for demo
         });
 
-        const messagesResponse = await this.makeGoogleAPIRequest(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`
-        );
-
-        const messages = messagesResponse.messages || [];
+        const messages = listResponse.result.messages || [];
         const detailedMessages: EmailMessage[] = [];
 
-        // Get detailed info for each message (limit to 10 for demo)
+        // Get detailed info for each message
         for (const message of messages.slice(0, 10)) {
           try {
-            const detailResponse = await this.makeGoogleAPIRequest(
-              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}?format=full`
-            );
+            const detailResponse = await window.gapi.client.gmail.users.messages.get({
+              userId: 'me',
+              id: message.id,
+              format: 'full'
+            });
 
-            if (detailResponse) {
-              const emailMessage = this.parseGmailMessage(detailResponse);
+            if (detailResponse.result) {
+              const emailMessage = this.parseGmailMessage(detailResponse.result);
               detailedMessages.push(emailMessage);
             }
           } catch (error) {
@@ -569,7 +517,7 @@ To fix this:
           }
         }
 
-        console.log(`✅ Fetched ${detailedMessages.length} messages from Gmail (read-only)`);
+        console.log(`✅ Fetched ${detailedMessages.length} real messages from Gmail API`);
         return detailedMessages;
       } else {
         // Mock implementation
@@ -656,19 +604,54 @@ To fix this:
       isImportant: gmailMessage.labelIds?.includes('IMPORTANT') || false,
       snippet: gmailMessage.snippet || '',
       providerId: 'gmail',
-      roomId: 'gmail-room-1' // Will be dynamic based on account
+      roomId: 'gmail-room-1'
     };
   }
 
-  // Note: markAsRead and starMessage are removed since we only have read-only access
   async markAsRead(messageId: string): Promise<boolean> {
-    console.warn('⚠️ markAsRead not available with read-only Gmail access');
-    return false;
+    if (!isGmailConfigured() || !this.accessToken) {
+      console.warn('⚠️ markAsRead not available with read-only Gmail access');
+      return false;
+    }
+
+    try {
+      await window.gapi.client.gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        resource: {
+          removeLabelIds: ['UNREAD']
+        }
+      });
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to mark message as read:', error);
+      return false;
+    }
   }
 
   async starMessage(messageId: string, starred: boolean = true): Promise<boolean> {
-    console.warn('⚠️ starMessage not available with read-only Gmail access');
-    return false;
+    if (!isGmailConfigured() || !this.accessToken) {
+      console.warn('⚠️ starMessage not available with read-only Gmail access');
+      return false;
+    }
+
+    try {
+      const labelIds = starred ? ['STARRED'] : [];
+      const removeLabelIds = starred ? [] : ['STARRED'];
+
+      await window.gapi.client.gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        resource: {
+          addLabelIds: labelIds,
+          removeLabelIds: removeLabelIds
+        }
+      });
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to star/unstar message:', error);
+      return false;
+    }
   }
 
   async getUnreadCount(): Promise<number> {
@@ -677,13 +660,17 @@ To fix this:
     }
 
     try {
-      if (isGmailConfigured() && this.accessToken) {
-        const response = await this.makeGoogleAPIRequest(
-          'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread&maxResults=1'
-        );
+      if (isGmailConfigured() && this.accessToken && window.gapi?.client) {
+        await window.gapi.client.load('gmail', 'v1');
+        
+        const response = await window.gapi.client.gmail.users.messages.list({
+          userId: 'me',
+          q: 'is:unread',
+          maxResults: 1
+        });
 
-        if (response) {
-          return response.resultSizeEstimate || 0;
+        if (response.result) {
+          return response.result.resultSizeEstimate || 0;
         }
         return 0;
       } else {

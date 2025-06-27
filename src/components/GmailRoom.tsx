@@ -65,12 +65,7 @@ const GmailRoom: React.FC = () => {
       console.log('✅ Gmail user info loaded:', info);
     } catch (error) {
       console.error('❌ Failed to get user info:', error);
-      // Don't show error to user, just use fallback
-      setUserInfo({
-        email: 'demo@gmail.com',
-        name: 'Demo User',
-        picture: 'https://via.placeholder.com/40'
-      });
+      setConnectionError('Failed to get user information. Please try reconnecting.');
     }
   };
 
@@ -190,7 +185,7 @@ const GmailRoom: React.FC = () => {
         console.log(`✅ AI parsing completed with ${Math.round(parseResponse.data.confidence * 100)}% confidence`);
         console.log(`🎯 Detected intent: ${parseResponse.data.intent}`);
         
-        // Mark as read after successful parsing (only works in mock mode)
+        // Mark as read after successful parsing
         try {
           await gmailService.markAsRead(message.id);
           console.log('✅ Marked email as read');
@@ -200,7 +195,7 @@ const GmailRoom: React.FC = () => {
             m.id === message.id ? { ...m, isRead: true } : m
           ));
         } catch (error) {
-          console.warn('⚠️ Failed to mark email as read (read-only mode):', error);
+          console.warn('⚠️ Failed to mark email as read:', error);
         }
       } else {
         console.log('❌ AI parsing failed or no meeting intent detected');
@@ -268,7 +263,7 @@ const GmailRoom: React.FC = () => {
             <div>
               <h2 className="text-3xl font-bold text-white">Gmail Room</h2>
               <p className="text-indigo-200 mt-1">
-                {isConnected ? 'Connected and ready' : 'Connect your Gmail account'}
+                {isConnected ? 'Connected to real Gmail' : 'Connect your Gmail account'}
               </p>
             </div>
           </div>
@@ -307,7 +302,7 @@ const GmailRoom: React.FC = () => {
                 ) : (
                   <Mail className="w-5 h-5" />
                 )}
-                <span>{isConnecting ? 'Connecting...' : 'Connect Gmail'}</span>
+                <span>{isConnecting ? 'Connecting...' : 'Connect Real Gmail'}</span>
               </button>
             )}
           </div>
@@ -320,9 +315,9 @@ const GmailRoom: React.FC = () => {
               <div className="flex items-center">
                 <Shield className="w-5 h-5 text-green-400 mr-3" />
                 <div>
-                  <h5 className="text-green-300 font-semibold">Gmail API Configured</h5>
+                  <h5 className="text-green-300 font-semibold">Real Gmail API Configured</h5>
                   <p className="text-green-200 text-sm">
-                    Real Gmail integration is active. You'll connect to your actual Gmail account with read-only access.
+                    Connected to your actual Gmail account with full API access. You'll see your real emails and can interact with them.
                   </p>
                 </div>
               </div>
@@ -362,7 +357,7 @@ const GmailRoom: React.FC = () => {
               </div>
               <div className="ml-auto">
                 <span className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded">
-                  Read-Only Access
+                  {isGmailConfigured() ? 'Real Gmail' : 'Mock Mode'}
                 </span>
               </div>
             </div>
@@ -422,21 +417,6 @@ const GmailRoom: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* CORS Information */}
-        {isConnected && isGmailConfigured() && (
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-            <div className="flex items-center">
-              <Info className="w-5 h-5 text-blue-400 mr-3" />
-              <div>
-                <h5 className="text-blue-300 font-semibold">Read-Only Gmail Access</h5>
-                <p className="text-blue-200 text-sm">
-                  Using read-only Gmail API with CORS-safe endpoints. Some features like marking emails as read are not available in browser-based applications.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Gmail Messages */}
@@ -446,7 +426,7 @@ const GmailRoom: React.FC = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-2xl font-bold text-white flex items-center">
                 <Loader2 className={`w-6 h-6 mr-3 ${isLoading ? 'animate-spin text-blue-400' : 'text-green-400'}`} />
-                Recent Emails ({messages.length})
+                {isGmailConfigured() ? 'Your Real Gmail Messages' : 'Sample Messages'} ({messages.length})
               </h3>
               <div className="text-sm text-indigo-200">
                 {isLoading ? 'Loading emails...' : 'Click an email to parse with AI'}
