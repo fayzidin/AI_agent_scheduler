@@ -16,47 +16,11 @@ class GmailService {
   private tokenClient: any = null;
   private currentUser: any = null;
 
-  // Mock data for development (only used when API is not configured)
-  private mockEmails: EmailMessage[] = [
-    {
-      id: '1',
-      threadId: 'thread-1',
-      subject: 'Meeting Request - Project Discussion',
-      from: { name: 'John Smith', email: 'john.smith@techcorp.com' },
-      to: [{ name: 'You', email: 'you@company.com' }],
-      date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      body: {
-        text: `Hi there,
-
-I hope this email finds you well. I wanted to schedule a meeting with you and the team at TechCorp Inc. to discuss our upcoming project collaboration.
-
-Would you be available on January 15th, 2024 at 2:00 PM? We could meet at our office or set up a video call, whatever works best for you.
-
-Please let me know if this time works for your schedule, or if you'd prefer a different time.
-
-Looking forward to hearing from you.
-
-Best regards,
-John Smith
-Senior Developer
-TechCorp Inc.
-john.smith@techcorp.com`
-      },
-      labels: ['INBOX', 'UNREAD'],
-      isRead: false,
-      isStarred: false,
-      isImportant: true,
-      snippet: 'I wanted to schedule a meeting with you and the team at TechCorp Inc. to discuss our upcoming project...',
-      providerId: 'gmail',
-      roomId: 'gmail-room-1'
-    }
-  ];
-
   async initialize(): Promise<boolean> {
     if (!isGmailConfigured()) {
-      console.warn('Gmail API not configured - using mock data');
-      this.isInitialized = true;
-      return true;
+      console.warn('Gmail API not configured - mock mode disabled');
+      this.isInitialized = false;
+      return false;
     }
 
     try {
@@ -299,9 +263,7 @@ john.smith@techcorp.com`
     console.log('🔐 Starting Gmail sign-in process...');
     
     if (!isGmailConfigured()) {
-      console.log('⚠️ Gmail API not configured - using mock mode');
-      this.isSignedIn = true;
-      return true;
+      throw new Error('Gmail API not configured. Please add your Google API credentials to environment variables.');
     }
 
     if (!this.isInitialized) {
@@ -372,12 +334,6 @@ john.smith@techcorp.com`
   }
 
   async signOut(): Promise<void> {
-    if (!this.isInitialized && !isGmailConfigured()) {
-      this.isSignedIn = false;
-      this.accessToken = '';
-      return;
-    }
-
     try {
       console.log('🚪 Signing out of Gmail...');
       
@@ -402,7 +358,7 @@ john.smith@techcorp.com`
 
   isConnected(): boolean {
     if (!isGmailConfigured()) {
-      return this.isSignedIn; // For mock mode
+      return false; // No mock mode
     }
 
     if (!this.isInitialized) return false;
@@ -435,8 +391,8 @@ john.smith@techcorp.com`
         
         if (response.result) {
           const userInfo = {
-            email: response.result.email || 'demo@gmail.com',
-            name: response.result.name || response.result.email || 'Demo User',
+            email: response.result.email || 'unknown@gmail.com',
+            name: response.result.name || response.result.email || 'Gmail User',
             picture: response.result.picture || 'https://via.placeholder.com/40'
           };
           
@@ -446,24 +402,11 @@ john.smith@techcorp.com`
           throw new Error('No user info in response');
         }
       } else {
-        // Mock user info
-        console.log('📧 Using mock Gmail user info...');
-        return {
-          email: 'demo@gmail.com',
-          name: 'Demo User',
-          picture: 'https://via.placeholder.com/40'
-        };
+        throw new Error('Gmail API not properly configured');
       }
     } catch (error) {
       console.error('❌ Failed to get Gmail user info:', error);
-      
-      // Fallback to mock data if API fails
-      console.log('📧 Falling back to mock user info due to API error');
-      return {
-        email: 'demo@gmail.com',
-        name: 'Demo User',
-        picture: 'https://via.placeholder.com/40'
-      };
+      throw error;
     }
   }
 
@@ -520,40 +463,11 @@ john.smith@techcorp.com`
         console.log(`✅ Fetched ${detailedMessages.length} real messages from Gmail API`);
         return detailedMessages;
       } else {
-        // Mock implementation
-        console.log('📧 Using mock Gmail data...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        let filteredEmails = [...this.mockEmails];
-        
-        if (filter.isRead === false) {
-          filteredEmails = filteredEmails.filter(email => !email.isRead);
-        }
-        if (filter.isStarred) {
-          filteredEmails = filteredEmails.filter(email => email.isStarred);
-        }
-        if (filter.isImportant) {
-          filteredEmails = filteredEmails.filter(email => email.isImportant);
-        }
-        if (filter.sender) {
-          filteredEmails = filteredEmails.filter(email => 
-            email.from.email.toLowerCase().includes(filter.sender!.toLowerCase())
-          );
-        }
-        if (filter.subject) {
-          filteredEmails = filteredEmails.filter(email => 
-            email.subject.toLowerCase().includes(filter.subject!.toLowerCase())
-          );
-        }
-        
-        return filteredEmails.slice(0, maxResults);
+        throw new Error('Gmail API not properly configured');
       }
     } catch (error) {
       console.error('❌ Failed to get Gmail messages:', error);
-      
-      // Fallback to mock data on error
-      console.log('📧 Falling back to mock data due to API error');
-      return this.mockEmails.slice(0, maxResults);
+      throw error;
     }
   }
 
@@ -610,7 +524,7 @@ john.smith@techcorp.com`
 
   async markAsRead(messageId: string): Promise<boolean> {
     if (!isGmailConfigured() || !this.accessToken) {
-      console.warn('⚠️ markAsRead not available with read-only Gmail access');
+      console.warn('⚠️ markAsRead not available without proper Gmail configuration');
       return false;
     }
 
@@ -631,7 +545,7 @@ john.smith@techcorp.com`
 
   async starMessage(messageId: string, starred: boolean = true): Promise<boolean> {
     if (!isGmailConfigured() || !this.accessToken) {
-      console.warn('⚠️ starMessage not available with read-only Gmail access');
+      console.warn('⚠️ starMessage not available without proper Gmail configuration');
       return false;
     }
 
@@ -674,8 +588,7 @@ john.smith@techcorp.com`
         }
         return 0;
       } else {
-        // Mock implementation
-        return this.mockEmails.filter(email => !email.isRead).length;
+        return 0;
       }
     } catch (error) {
       console.error('❌ Failed to get unread count:', error);

@@ -134,22 +134,52 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
   };
 
   const handleScheduleMeeting = async () => {
-    if (!selectedTime || !hasConnectedProvider() || !selectedDate) return;
+    if (!selectedTime || !hasConnectedProvider() || !selectedDate) {
+      console.error('Missing required data for scheduling:', {
+        selectedTime,
+        hasConnectedProvider: hasConnectedProvider(),
+        selectedDate,
+        parsedData
+      });
+      setConnectionError('Missing required information for scheduling. Please ensure date and time are selected.');
+      return;
+    }
+
+    // Validate parsed data
+    if (!parsedData.contactName || parsedData.contactName === 'Unknown Contact') {
+      setConnectionError('Contact name is required for scheduling. Please check the email parsing results.');
+      return;
+    }
+
+    if (!parsedData.email || !parsedData.email.includes('@')) {
+      setConnectionError('Valid email address is required for scheduling. Please check the email parsing results.');
+      return;
+    }
 
     setIsScheduling(true);
+    setConnectionError('');
+    
     try {
       // Create proper ISO datetime string
       const startDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
+      
+      // Validate the date
+      if (isNaN(startDateTime.getTime())) {
+        throw new Error('Invalid date/time format');
+      }
+      
       const endDateTime = new Date(startDateTime.getTime() + meetingDuration * 60000);
 
       const scheduleRequest = {
         title: `Meeting with ${parsedData.contactName} - ${parsedData.company}`,
         start: startDateTime.toISOString(),
         end: endDateTime.toISOString(),
-        attendees: parsedData.participants,
-        description: `Scheduled meeting with ${parsedData.contactName} from ${parsedData.company}`,
+        attendees: parsedData.participants.filter(email => email && email.includes('@')),
+        description: `Scheduled meeting with ${parsedData.contactName} from ${parsedData.company}.\n\nOriginal request: ${parsedData.datetime}`,
         location: 'Video Conference'
       };
+
+      console.log('📅 Scheduling meeting with request:', scheduleRequest);
 
       const event = await calendarService.scheduleEvent(scheduleRequest);
       setScheduledEvent(event);
@@ -160,24 +190,39 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
       if (onScheduled) {
         onScheduled(event);
       }
-    } catch (error) {
+
+      console.log('✅ Meeting scheduled successfully:', event);
+    } catch (error: any) {
       console.error('Failed to schedule meeting:', error);
+      setConnectionError(`Failed to schedule meeting: ${error.message || 'Unknown error'}`);
     } finally {
       setIsScheduling(false);
     }
   };
 
   const extractDateFromParsedData = (datetime: string): string => {
-    // Enhanced date extraction
+    // Enhanced date extraction with better parsing
+    console.log('📅 Extracting date from:', datetime);
+    
+    // If datetime is "Not specified", use tomorrow as default
+    if (!datetime || datetime === 'Not specified') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return tomorrow.toISOString().split('T')[0];
+    }
+
+    // Enhanced date patterns
     const datePatterns = [
       // ISO format: 2024-01-15
       /(\d{4}-\d{2}-\d{2})/,
+      // Month name formats: May 30, 2024 | June 30, 2025
+      /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/i,
+      // Month name without year: May 30 | June 30
+      /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?/i,
       // US format: 01/15/2024 or 1/15/2024
       /(\d{1,2})\/(\d{1,2})\/(\d{4})/,
       // European format: 15/01/2024
-      /(\d{1,2})\/(\d{1,2})\/(\d{4})/,
-      // Month name formats: January 15, 2024 | Jan 15, 2024
-      /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/i
+      /(\d{1,2})\/(\d{1,2})\/(\d{4})/
     ];
 
     for (const pattern of datePatterns) {
@@ -185,7 +230,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
       if (match) {
         if (pattern.source.includes('January|February')) {
           // Handle month name format
-          const monthNames = {
+          const monthNames: { [key: string]: string } = {
             'january': '01', 'jan': '01', 'february': '02', 'feb': '02',
             'march': '03', 'mar': '03', 'april': '04', 'apr': '04',
             'may': '05', 'june': '06', 'jun': '06', 'july': '07', 'jul': '07',
@@ -196,12 +241,15 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
           
           const monthName = match[1].toLowerCase();
           const day = match[2].padStart(2, '0');
-          const year = match[3];
-          const month = monthNames[monthName as keyof typeof monthNames] || '01';
+          const year = match[3] || (new Date().getFullYear() + 1).toString(); // Use next year if no year provided
+          const month = monthNames[monthName] || '01';
           
-          return `${year}-${month}-${day}`;
+          const extractedDate = `${year}-${month}-${day}`;
+          console.log('📅 Extracted date (month name):', extractedDate);
+          return extractedDate;
         } else if (pattern.source.includes('\\d{4}-\\d{2}-\\d{2}')) {
           // Already in ISO format
+          console.log('📅 Extracted date (ISO):', match[1]);
           return match[1];
         } else {
           // Handle numeric formats
@@ -211,7 +259,9 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
             const month = parts[0].padStart(2, '0');
             const day = parts[1].padStart(2, '0');
             const year = parts[2];
-            return `${year}-${month}-${day}`;
+            const extractedDate = `${year}-${month}-${day}`;
+            console.log('📅 Extracted date (numeric):', extractedDate);
+            return extractedDate;
           }
         }
       }
@@ -221,17 +271,23 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
     if (datetime.toLowerCase().includes('tomorrow')) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      return tomorrow.toISOString().split('T')[0];
+      const extractedDate = tomorrow.toISOString().split('T')[0];
+      console.log('📅 Extracted date (tomorrow):', extractedDate);
+      return extractedDate;
     } else if (datetime.toLowerCase().includes('next week')) {
       const nextWeek = new Date();
       nextWeek.setDate(nextWeek.getDate() + 7);
-      return nextWeek.toISOString().split('T')[0];
+      const extractedDate = nextWeek.toISOString().split('T')[0];
+      console.log('📅 Extracted date (next week):', extractedDate);
+      return extractedDate;
     }
     
     // Fallback to tomorrow
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
+    const fallbackDate = tomorrow.toISOString().split('T')[0];
+    console.log('📅 Using fallback date:', fallbackDate);
+    return fallbackDate;
   };
 
   const formatTime = (time: string): string => {
@@ -291,6 +347,42 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
               Auto-scheduling detected! Let's check availability and schedule this meeting.
             </p>
           </div>
+        </div>
+
+        {/* Parsed Data Summary */}
+        <div className="mb-8 bg-white/5 rounded-xl p-6 border border-white/10">
+          <h4 className="text-lg font-semibold text-white mb-4">Meeting Details from Email</h4>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <span className="text-sm text-slate-300">Contact:</span>
+              <p className="text-white font-semibold">{parsedData.contactName}</p>
+            </div>
+            <div>
+              <span className="text-sm text-slate-300">Company:</span>
+              <p className="text-white font-semibold">{parsedData.company}</p>
+            </div>
+            <div>
+              <span className="text-sm text-slate-300">Email:</span>
+              <p className="text-white font-semibold">{parsedData.email}</p>
+            </div>
+            <div>
+              <span className="text-sm text-slate-300">Requested Time:</span>
+              <p className="text-white font-semibold">{parsedData.datetime}</p>
+            </div>
+          </div>
+          
+          {/* Validation Warnings */}
+          {(!parsedData.contactName || parsedData.contactName === 'Unknown Contact') && (
+            <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+              <p className="text-orange-300 text-sm">⚠️ Contact name not detected. Please verify the email parsing results.</p>
+            </div>
+          )}
+          
+          {(!parsedData.email || !parsedData.email.includes('@')) && (
+            <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+              <p className="text-orange-300 text-sm">⚠️ Valid email address not detected. Please verify the email parsing results.</p>
+            </div>
+          )}
         </div>
 
         {/* User Authentication Status */}
@@ -404,13 +496,8 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
               <div className="flex items-center">
                 <AlertCircle className="w-5 h-5 text-red-400 mr-3" />
                 <div>
-                  <p className="text-red-300 font-semibold">Connection Failed</p>
+                  <p className="text-red-300 font-semibold">Error</p>
                   <p className="text-red-200 text-sm">{connectionError}</p>
-                  {connectionError.includes('not configured') && (
-                    <p className="text-red-200 text-sm mt-1">
-                      Please check the GOOGLE_CALENDAR_SETUP.md file for setup instructions.
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
@@ -520,8 +607,8 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                 {selectedTime && (
                   <button
                     onClick={handleScheduleMeeting}
-                    disabled={isScheduling}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white font-semibold rounded-xl hover:from-green-600 hover:to-blue-700 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center space-x-3"
+                    disabled={isScheduling || !parsedData.contactName || parsedData.contactName === 'Unknown Contact' || !parsedData.email || !parsedData.email.includes('@')}
+                    className="w-full px-6 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white font-semibold rounded-xl hover:from-green-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center space-x-3"
                   >
                     {isScheduling ? (
                       <Loader2 className="w-5 h-5 animate-spin" />

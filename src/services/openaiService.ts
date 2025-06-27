@@ -53,44 +53,55 @@ class OpenAIService {
     }
 
     try {
-      const systemPrompt = `You are an expert email parser specialized in extracting meeting-related information. 
+      const systemPrompt = `You are an expert email parser specialized in extracting meeting-related information with high accuracy.
 
-Your task is to analyze email content and extract structured data about meeting requests, cancellations, or rescheduling.
+CRITICAL PARSING RULES:
+1. CONTACT NAME: Extract the actual sender's name, not greetings
+   - "Hello, Fayzidin, this is Alesia" → contactName: "Alesia"
+   - "Hi colleagues, ...Best regards, Fred" → contactName: "Fred"
+   - Look for "this is [NAME]", "Best regards, [NAME]", signature lines
 
-CRITICAL INSTRUCTIONS:
-1. Extract ONLY the actual contact name (e.g., "Sarah Johnson" not "Hi Sarah Johnson")
-2. Extract ONLY the company name (e.g., "Microsoft Corporation" not full sentences)
-3. Be precise with date/time extraction
-4. Identify the correct intent based on email content
-5. Provide confidence score (0-1) based on clarity of information
+2. COMPANY NAME: Extract company names mentioned in context
+   - "recruiter at Andersen" → company: "Andersen"
+   - "Best regards, Fred HighTechIno" → company: "HighTechIno"
+   - Look for "at [COMPANY]", "from [COMPANY]", signature companies
+
+3. DATE/TIME: Parse various date formats accurately
+   - "May 30 at 11.30 GMT+3" → "May 30, 2024 at 11:30 AM GMT+3"
+   - "June 30, 2025 Time: 4:00 PM" → "June 30, 2025 at 4:00 PM"
+   - Always include year if missing (use current year + 1 if month has passed)
+
+4. EMAIL EXTRACTION: Find all email addresses in the content
+   - Extract from signatures, participant lists, etc.
+
+5. INTENT DETECTION: Be precise about meeting intentions
+   - "can we arrange a call" → "schedule_meeting"
+   - "I'd like to invite you to a meeting" → "schedule_meeting"
 
 RESPONSE FORMAT (JSON only):
 {
-  "contactName": "First Last",
-  "email": "email@domain.com",
-  "company": "Company Name Only",
-  "datetime": "January 15, 2024 at 2:00 PM",
+  "contactName": "Actual sender name",
+  "email": "sender@domain.com",
+  "company": "Company Name",
+  "datetime": "Formatted date and time",
   "participants": ["email1@domain.com", "email2@domain.com"],
   "intent": "schedule_meeting|reschedule_meeting|cancel_meeting|general",
   "confidence": 0.95,
   "reasoning": "Brief explanation of extraction logic"
 }
 
-INTENT CLASSIFICATION:
-- schedule_meeting: New meeting requests
-- reschedule_meeting: Changing existing meeting time
-- cancel_meeting: Cancelling existing meetings
-- general: Other communications
-
-COMPANY EXTRACTION RULES:
-- Extract only company names, not full sentences
-- Remove phrases like "at", "with the team at", etc.
-- Examples: "Microsoft", "TechCorp Inc.", "Google LLC"
-
-NAME EXTRACTION RULES:
-- Extract actual names, not greetings
-- "Hi Sarah Johnson" → "Sarah Johnson"
-- "Dear Mr. Smith" → "Mr. Smith"`;
+EXAMPLES:
+Input: "Hello, Fayzidin, this is Alesia, recruiter at Andersen, can we arrange a call with our hiring manager, I suggest choosing a slot - May 30 at 11.30 GMT+3?"
+Output: {
+  "contactName": "Alesia",
+  "email": "alesia@andersen.com",
+  "company": "Andersen",
+  "datetime": "May 30, 2024 at 11:30 AM GMT+3",
+  "participants": ["fayzidin@example.com"],
+  "intent": "schedule_meeting",
+  "confidence": 0.9,
+  "reasoning": "Clear meeting request from Alesia at Andersen for May 30"
+}`;
 
       const userPrompt = `Parse this email content and extract meeting information:
 
@@ -158,28 +169,23 @@ Return only valid JSON with the extracted information.`;
   }
 
   private validateAndCleanResponse(data: ParsedEmailData, originalEmail: string): ParsedEmailData {
-    // Clean contact name - remove greetings
-    let cleanContactName = data.contactName || 'Unknown Contact';
-    cleanContactName = cleanContactName
-      .replace(/^(Hi|Hello|Dear)\s+/i, '')
-      .replace(/,$/, '')
-      .trim();
-
-    // Clean company name - extract only company name
-    let cleanCompany = data.company || 'Unknown Company';
+    // Enhanced contact name extraction
+    let cleanContactName = data.contactName || this.extractContactName(originalEmail);
     
-    // Remove common prefixes and suffixes that might be included
-    cleanCompany = cleanCompany
-      .replace(/^(at|with|from|the team at|meeting with.*at)\s+/i, '')
-      .replace(/\s+(to discuss|about|regarding|for).*$/i, '')
-      .replace(/^(I wanted to|We would like to).*\s+(at|with)\s+/i, '')
-      .trim();
-
-    // Extract email if not provided or invalid
+    // Enhanced company extraction
+    let cleanCompany = data.company || this.extractCompanyName(originalEmail);
+    
+    // Enhanced email extraction
     let cleanEmail = data.email;
     if (!cleanEmail || !cleanEmail.includes('@')) {
       const emailMatch = originalEmail.match(/[\w.-]+@[\w.-]+\.\w+/);
       cleanEmail = emailMatch ? emailMatch[0] : 'no-email@example.com';
+    }
+
+    // Enhanced datetime parsing
+    let cleanDatetime = data.datetime;
+    if (!cleanDatetime || cleanDatetime === 'Not specified') {
+      cleanDatetime = this.parseDateTime(originalEmail);
     }
 
     // Validate participants array
@@ -194,11 +200,11 @@ Return only valid JSON with the extracted information.`;
       contactName: cleanContactName,
       email: cleanEmail,
       company: cleanCompany,
-      datetime: data.datetime || 'Not specified',
+      datetime: cleanDatetime,
       participants: cleanParticipants,
       intent: data.intent || 'general',
       confidence: cleanConfidence,
-      reasoning: data.reasoning || 'Automated parsing'
+      reasoning: data.reasoning || 'Enhanced parsing with improved accuracy'
     };
   }
 
@@ -214,7 +220,7 @@ Return only valid JSON with the extracted information.`;
       return {
         success: true,
         data: parsedData,
-        rawResponse: 'Fallback parsing used'
+        rawResponse: 'Enhanced fallback parsing used'
       };
     } catch (error) {
       return {
@@ -257,46 +263,71 @@ Return only valid JSON with the extracted information.`;
   }
 
   private parseDateTime(text: string): string {
-    // Enhanced date patterns
-    const datePatterns = [
-      // Full dates with various formats
-      /(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/gi,
-      // Numeric dates
+    // Enhanced date patterns with better matching
+    const dateTimePatterns = [
+      // "May 30 at 11.30 GMT+3"
+      /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\s+at\s+(\d{1,2})[\.:](\d{2})\s*(AM|PM|GMT[+-]\d+)?/gi,
+      
+      // "June 30, 2025 Time: 4:00 PM"
+      /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4}).*?(?:Time:|at)\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
+      
+      // "Date: June 30, 2025" and "Time: 4:00 PM" on separate lines
+      /Date:\s*(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/gi,
+      
+      // Standard date formats
       /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/g,
       /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g,
-      // Relative dates
-      /(tomorrow|next\s+(?:week|monday|tuesday|wednesday|thursday|friday|saturday|sunday))/gi
     ];
 
-    // Enhanced time patterns
     const timePatterns = [
-      /(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)/gi,
-      /(\d{1,2}):(\d{2})/g
+      /Time:\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
+      /at\s+(\d{1,2})[\.:](\d{2})\s*(AM|PM|GMT[+-]\d+)?/gi,
+      /(\d{1,2}):(\d{2})\s*(AM|PM)/gi
     ];
 
     let foundDate = '';
     let foundTime = '';
+    let foundYear = '';
 
-    // Extract date
-    for (const pattern of datePatterns) {
-      const matches = text.match(pattern);
-      if (matches && matches.length > 0) {
-        foundDate = matches[0];
+    // Extract date with enhanced patterns
+    for (const pattern of dateTimePatterns) {
+      const matches = [...text.matchAll(pattern)];
+      if (matches.length > 0) {
+        const match = matches[0];
+        if (match[3] && match[3].length === 4) {
+          // Has year
+          foundDate = `${match[1]} ${match[2]}, ${match[3]}`;
+          foundYear = match[3];
+          if (match[4] && match[5]) {
+            foundTime = `${match[4]}:${match[5]} ${match[6] || ''}`.trim();
+          }
+        } else {
+          // No year, add current year + 1
+          const currentYear = new Date().getFullYear();
+          foundDate = `${match[1]} ${match[2]}, ${currentYear + 1}`;
+          foundYear = (currentYear + 1).toString();
+          if (match[3] && match[4]) {
+            foundTime = `${match[3]}:${match[4]} ${match[5] || ''}`.trim();
+          }
+        }
         break;
       }
     }
 
-    // Extract time
-    for (const pattern of timePatterns) {
-      const matches = text.match(pattern);
-      if (matches && matches.length > 0) {
-        foundTime = matches[0];
-        break;
+    // Extract time if not found with date
+    if (!foundTime) {
+      for (const pattern of timePatterns) {
+        const matches = [...text.matchAll(pattern)];
+        if (matches.length > 0) {
+          const match = matches[0];
+          foundTime = `${match[1]}:${match[2]} ${match[3] || ''}`.trim();
+          break;
+        }
       }
     }
 
     // Handle relative dates
-    if (foundDate.toLowerCase().includes('tomorrow')) {
+    if (text.toLowerCase().includes('tomorrow')) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       foundDate = tomorrow.toLocaleDateString('en-US', { 
@@ -319,81 +350,72 @@ Return only valid JSON with the extracted information.`;
   }
 
   private extractContactName(text: string): string {
-    // Remove common email prefixes and clean the text
-    const cleanText = text
-      .replace(/^(Hi|Hello|Dear|Hey)\s+/i, '')
-      .replace(/,.*$/s, '')
-      .replace(/\n.*$/s, '')
-      .trim();
+    // Enhanced patterns for name extraction
+    const namePatterns = [
+      // "this is [Name]"
+      /this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      
+      // "Best regards, [Name]" or "Best, [Name]"
+      /(?:Best\s+regards?|Best|Sincerely|Thanks?),?\s*\n?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      
+      // Name before company in signature
+      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*\n?\s*([A-Z][a-zA-Z\s&]+(?:Inc\.|LLC|Corp\.|Corporation|Company|Ltd\.))/i,
+      
+      // Name at end of email
+      /\n\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*\n?\s*([A-Z][a-zA-Z\s&]+)\s*$/i,
+      
+      // After greeting patterns
+      /(?:Hi|Hello|Dear)\s+[^,]+,?\s+this\s+is\s+([A-Z][a-z]+)/i,
+    ];
 
-    // Look for proper names (capitalized words)
-    const namePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/;
-    const nameMatch = cleanText.match(namePattern);
-    
-    if (nameMatch) {
-      const potentialName = nameMatch[1].trim();
-      
-      // Filter out common words
-      const commonWords = ['Best', 'Kind', 'Looking', 'Thank', 'Please', 'Hope', 'Regards', 'Sincerely'];
-      const nameWords = potentialName.split(' ');
-      
-      const hasCommonWord = nameWords.some(word => commonWords.includes(word));
-      
-      if (!hasCommonWord && nameWords.length >= 2) {
-        return potentialName;
+    for (const pattern of namePatterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        const name = match[1].trim();
+        // Filter out common words
+        const commonWords = ['Best', 'Regards', 'Thanks', 'Sincerely', 'Hello', 'Hi', 'Dear'];
+        if (!commonWords.includes(name)) {
+          return name;
+        }
       }
-    }
-
-    // Fallback: look for names after greetings
-    const greetingPattern = /(?:Hi|Hello|Dear)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i;
-    const greetingMatch = text.match(greetingPattern);
-    
-    if (greetingMatch) {
-      return greetingMatch[1].trim();
     }
 
     return 'Unknown Contact';
   }
 
   private extractCompanyName(text: string): string {
-    // Pattern 1: Company names with legal suffixes
-    const companySuffixPattern = /\b([A-Z][a-zA-Z\s&]+?(?:\s+(?:Inc\.|LLC|Corp\.|Corporation|Company|Ltd\.|Limited|Co\.)))\b/g;
-    const suffixMatches = [...text.matchAll(companySuffixPattern)];
-    
-    if (suffixMatches.length > 0) {
-      for (const match of suffixMatches) {
-        const company = match[1].trim();
-        if (company.split(' ').length <= 4) {
-          return company;
-        }
-      }
-    }
-
-    // Pattern 2: "at [CompanyName]" extraction
-    const atPattern = /\bat\s+([A-Z][a-zA-Z\s&]{1,30}?)(?:\s+(?:to|for|about|regarding|and|,|\.|$))/gi;
-    const atMatches = [...text.matchAll(atPattern)];
-    
-    for (const match of atMatches) {
-      const company = match[1].trim();
-      const excludeWords = ['the team', 'the office', 'the meeting', 'your convenience'];
-      const isExcluded = excludeWords.some(phrase => company.toLowerCase().includes(phrase));
+    // Enhanced company extraction patterns
+    const companyPatterns = [
+      // "recruiter at [Company]"
+      /(?:recruiter|employee|work|working)\s+at\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[,.]|\s+can|\s+I|\s*$)/i,
       
-      if (!isExcluded && company.length > 2 && company.length < 40) {
-        return company;
-      }
-    }
-
-    // Pattern 3: Well-known company names
-    const knownCompanies = [
-      'Microsoft', 'Google', 'Apple', 'Amazon', 'Meta', 'Tesla', 'Netflix', 'Spotify',
-      'Salesforce', 'Oracle', 'IBM', 'Intel', 'Adobe', 'Zoom', 'Slack', 'Dropbox'
+      // Company in signature (Name \n Company)
+      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*\n?\s*([A-Z][a-zA-Z\s&]+)(?:\s*\n|\s*$)/,
+      
+      // Company with legal suffixes
+      /\b([A-Z][a-zA-Z\s&]+?(?:\s+(?:Inc\.|LLC|Corp\.|Corporation|Company|Ltd\.|Limited|Co\.)))\b/g,
+      
+      // "from [Company]"
+      /from\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[,.]|\s+to|\s*$)/i,
+      
+      // Well-known company patterns
+      /\b(Andersen|HighTechIno|Microsoft|Google|Apple|Amazon|Meta|Tesla|Netflix|Spotify|Salesforce|Oracle|IBM|Intel|Adobe|Zoom|Slack|Dropbox)\b/i,
     ];
-    
-    for (const company of knownCompanies) {
-      const regex = new RegExp(`\\b${company}(?:\\s+(?:Inc\\.|Corp\\.|Corporation|Company))?\\b`, 'i');
-      const match = text.match(regex);
-      if (match) {
-        return match[0];
+
+    for (const pattern of companyPatterns) {
+      const matches = [...text.matchAll(pattern)];
+      for (const match of matches) {
+        if (match[1] || match[2]) {
+          const company = (match[1] || match[2]).trim();
+          
+          // Filter out common non-company words
+          const excludeWords = ['the team', 'the office', 'the meeting', 'your convenience', 'our team', 'Best regards'];
+          const isExcluded = excludeWords.some(phrase => company.toLowerCase().includes(phrase.toLowerCase()));
+          
+          if (!isExcluded && company.length > 2 && company.length < 50) {
+            return company;
+          }
+        }
       }
     }
 
@@ -410,7 +432,8 @@ Return only valid JSON with the extracted information.`;
                lowerText.includes('cancel the meeting')) {
       return 'cancel_meeting';
     } else if (lowerText.includes('meeting') || lowerText.includes('schedule') || 
-               lowerText.includes('appointment') || lowerText.includes('call')) {
+               lowerText.includes('appointment') || lowerText.includes('call') ||
+               lowerText.includes('arrange') || lowerText.includes('invite you to')) {
       return 'schedule_meeting';
     }
     
