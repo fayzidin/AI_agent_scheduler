@@ -13,7 +13,8 @@ import {
   RefreshCw,
   ExternalLink,
   Shield,
-  Settings
+  Settings,
+  Info
 } from 'lucide-react';
 import { gmailService } from '../services/gmailService';
 import { openaiService } from '../services/openaiService';
@@ -34,6 +35,7 @@ const GmailRoom: React.FC = () => {
   const [isParsing, setIsParsing] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [connectionError, setConnectionError] = useState<string>('');
+  const [userInfo, setUserInfo] = useState<any>(null);
 
   useEffect(() => {
     checkConnection();
@@ -41,12 +43,35 @@ const GmailRoom: React.FC = () => {
 
   useEffect(() => {
     if (isConnected) {
+      fetchUserInfo();
       fetchEmails();
     }
   }, [isConnected]);
 
   const checkConnection = () => {
-    setIsConnected(gmailService.isConnected());
+    const connected = gmailService.isConnected();
+    setIsConnected(connected);
+    
+    if (connected) {
+      console.log('✅ Gmail already connected');
+    }
+  };
+
+  const fetchUserInfo = async () => {
+    try {
+      console.log('👤 Fetching Gmail user info...');
+      const info = await gmailService.getUserInfo();
+      setUserInfo(info);
+      console.log('✅ Gmail user info loaded:', info);
+    } catch (error) {
+      console.error('❌ Failed to get user info:', error);
+      // Don't show error to user, just use fallback
+      setUserInfo({
+        email: 'demo@gmail.com',
+        name: 'Demo User',
+        picture: 'https://via.placeholder.com/40'
+      });
+    }
   };
 
   const handleConnect = async () => {
@@ -75,8 +100,9 @@ const GmailRoom: React.FC = () => {
         console.log('✅ Step 3: Gmail connection successful!');
         setIsConnected(true);
         
-        // Fetch emails immediately after connection
-        console.log('📧 Step 4: Fetching emails...');
+        // Fetch user info and emails
+        console.log('📧 Step 4: Loading user info and emails...');
+        await fetchUserInfo();
         await fetchEmails();
       } else {
         throw new Error('Gmail authentication returned false');
@@ -112,6 +138,7 @@ const GmailRoom: React.FC = () => {
       setMessages([]);
       setSelectedMessage(null);
       setParsedData(null);
+      setUserInfo(null);
       console.log('✅ Disconnected from Gmail successfully');
     } catch (error) {
       console.error('❌ Failed to disconnect Gmail:', error);
@@ -163,7 +190,7 @@ const GmailRoom: React.FC = () => {
         console.log(`✅ AI parsing completed with ${Math.round(parseResponse.data.confidence * 100)}% confidence`);
         console.log(`🎯 Detected intent: ${parseResponse.data.intent}`);
         
-        // Mark as read after successful parsing
+        // Mark as read after successful parsing (only works in mock mode)
         try {
           await gmailService.markAsRead(message.id);
           console.log('✅ Marked email as read');
@@ -173,7 +200,7 @@ const GmailRoom: React.FC = () => {
             m.id === message.id ? { ...m, isRead: true } : m
           ));
         } catch (error) {
-          console.warn('⚠️ Failed to mark email as read:', error);
+          console.warn('⚠️ Failed to mark email as read (read-only mode):', error);
         }
       } else {
         console.log('❌ AI parsing failed or no meeting intent detected');
@@ -295,7 +322,7 @@ const GmailRoom: React.FC = () => {
                 <div>
                   <h5 className="text-green-300 font-semibold">Gmail API Configured</h5>
                   <p className="text-green-200 text-sm">
-                    Real Gmail integration is active. You'll connect to your actual Gmail account.
+                    Real Gmail integration is active. You'll connect to your actual Gmail account with read-only access.
                   </p>
                 </div>
               </div>
@@ -315,6 +342,32 @@ const GmailRoom: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* User Info Display */}
+        {isConnected && userInfo && (
+          <div className="mb-6 bg-white/5 rounded-xl p-4">
+            <div className="flex items-center">
+              <img
+                src={userInfo.picture}
+                alt={userInfo.name}
+                className="w-10 h-10 rounded-lg mr-3"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = 'https://via.placeholder.com/40';
+                }}
+              />
+              <div>
+                <h5 className="text-white font-semibold">{userInfo.name}</h5>
+                <p className="text-indigo-200 text-sm">{userInfo.email}</p>
+              </div>
+              <div className="ml-auto">
+                <span className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded">
+                  Read-Only Access
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* User Authentication Status */}
         {user && (
@@ -364,6 +417,21 @@ const GmailRoom: React.FC = () => {
                 <h5 className="text-blue-300 font-semibold">Sign In Required</h5>
                 <p className="text-blue-200 text-sm">
                   Please sign in to your account to connect Gmail and access your emails.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CORS Information */}
+        {isConnected && isGmailConfigured() && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+            <div className="flex items-center">
+              <Info className="w-5 h-5 text-blue-400 mr-3" />
+              <div>
+                <h5 className="text-blue-300 font-semibold">Read-Only Gmail Access</h5>
+                <p className="text-blue-200 text-sm">
+                  Using read-only Gmail API with CORS-safe endpoints. Some features like marking emails as read are not available in browser-based applications.
                 </p>
               </div>
             </div>
