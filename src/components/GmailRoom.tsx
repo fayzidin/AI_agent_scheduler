@@ -1,24 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Mail, 
-  Calendar, 
-  Users, 
-  Clock, 
-  Star, 
-  CheckCircle, 
-  AlertCircle, 
-  Loader2, 
-  Send, 
-  Brain,
-  RefreshCw,
-  ExternalLink,
-  Shield,
-  Settings,
-  Info,
-  Filter,
-  Inbox,
-  MarkEmailRead
-} from 'lucide-react';
+import { Mail, Calendar, Users, Clock, Star, CheckCircle, AlertCircle, Loader2, Send, Brain, RefreshCw, ExternalLink, Shield, Settings, Info, Filter, Inbox, MailSearch as MarkEmailRead } from 'lucide-react';
 import { gmailService } from '../services/gmailService';
 import { openaiService } from '../services/openaiService';
 import { calendarService } from '../services/calendarService';
