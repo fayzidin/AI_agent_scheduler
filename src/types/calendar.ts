@@ -51,7 +51,7 @@ export interface RescheduleRequest {
 }
 
 export interface CalendarIntegration {
-  checkAvailability: (date: string, participants: string[]) => Promise<AvailabilityResponse>;
+  checkAvailability: (date: string, participants: string[], preferredTime?: string) => Promise<AvailabilityResponse>;
   scheduleEvent: (request: ScheduleRequest) => Promise<CalendarEvent>;
   getEvents: (startDate: string, endDate: string) => Promise<CalendarEvent[]>;
   searchEvents: (query: string, participants: string[]) => Promise<EventSearchResult>;

@@ -119,17 +119,87 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
     setIsCheckingAvailability(true);
     try {
       const dateToCheck = targetDate || selectedDate;
-      const result = await calendarService.checkAvailability(dateToCheck, parsedData.participants);
+      console.log(`📅 Checking availability for ${dateToCheck} with preferred time: ${parsedData.datetime}`);
+      
+      // Pass the preferred time from AI parsing to the calendar service
+      const result = await calendarService.checkAvailability(
+        dateToCheck, 
+        parsedData.participants, 
+        parsedData.datetime // This is the key addition - pass the AI-parsed datetime
+      );
+      
       setAvailability(result);
       
-      // Auto-select first suggested time
+      // Auto-select first suggested time (which should be the preferred time if available)
       if (result.suggestedTimes.length > 0) {
         setSelectedTime(result.suggestedTimes[0]);
+        console.log(`✨ Auto-selected time: ${result.suggestedTimes[0]} (${result.suggestedTimes[0] === extractTimeFromDateTime(parsedData.datetime) ? 'preferred time' : 'alternative time'})`);
       }
     } catch (error) {
       console.error('Failed to check availability:', error);
     } finally {
       setIsCheckingAvailability(false);
+    }
+  };
+
+  const extractTimeFromDateTime = (datetime: string): string | null => {
+    try {
+      // Handle various datetime formats and extract time
+      console.log('🕐 Extracting time from:', datetime);
+      
+      // Pattern 1: "May 30, 2024 at 11:30 AM GMT+3"
+      const timePattern1 = /at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i;
+      const match1 = datetime.match(timePattern1);
+      if (match1) {
+        let hour = parseInt(match1[1]);
+        const minute = match1[2];
+        const ampm = match1[3]?.toUpperCase();
+        
+        if (ampm === 'PM' && hour !== 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+        
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
+        console.log('🕐 Extracted time (pattern 1):', timeString);
+        return timeString;
+      }
+      
+      // Pattern 2: "June 30, 2025 Time: 4:00 PM"
+      const timePattern2 = /Time:\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i;
+      const match2 = datetime.match(timePattern2);
+      if (match2) {
+        let hour = parseInt(match2[1]);
+        const minute = match2[2];
+        const ampm = match2[3]?.toUpperCase();
+        
+        if (ampm === 'PM' && hour !== 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+        
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
+        console.log('🕐 Extracted time (pattern 2):', timeString);
+        return timeString;
+      }
+      
+      // Pattern 3: Simple time patterns like "14:30" or "2:30 PM"
+      const simpleTimePattern = /(\d{1,2}):(\d{2})\s*(AM|PM)?/i;
+      const simpleMatch = datetime.match(simpleTimePattern);
+      if (simpleMatch) {
+        let hour = parseInt(simpleMatch[1]);
+        const minute = simpleMatch[2];
+        const ampm = simpleMatch[3]?.toUpperCase();
+        
+        if (ampm === 'PM' && hour !== 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+        
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
+        console.log('🕐 Extracted time (simple):', timeString);
+        return timeString;
+      }
+      
+      console.log('⚠️ Could not extract time from:', datetime);
+      return null;
+    } catch (error) {
+      console.error('❌ Error extracting time:', error);
+      return null;
     }
   };
 
@@ -571,18 +641,34 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                     Available times for {formatDate(availability.date)}:
                   </h5>
                   
+                  {/* Show preferred time indicator if it's the first suggestion */}
+                  {availability.suggestedTimes.length > 0 && extractTimeFromDateTime(parsedData.datetime) === availability.suggestedTimes[0] && (
+                    <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <p className="text-green-300 text-sm flex items-center">
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        ✨ Great news! Your requested time ({formatTime(availability.suggestedTimes[0])}) is available and shown first.
+                      </p>
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {availability.suggestedTimes.map((time) => (
+                    {availability.suggestedTimes.map((time, index) => (
                       <button
                         key={time}
                         onClick={() => setSelectedTime(time)}
-                        className={`p-3 rounded-lg border transition-all duration-200 ${
+                        className={`p-3 rounded-lg border transition-all duration-200 relative ${
                           selectedTime === time
                             ? 'bg-blue-500/30 border-blue-400 text-blue-200'
                             : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
                         }`}
                       >
                         {formatTime(time)}
+                        {/* Show preferred indicator for the first suggestion if it matches AI-parsed time */}
+                        {index === 0 && extractTimeFromDateTime(parsedData.datetime) === time && (
+                          <div className="absolute -top-2 -right-2 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs">✨</span>
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>

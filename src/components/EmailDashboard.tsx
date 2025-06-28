@@ -47,20 +47,29 @@ const EmailDashboard: React.FC = () => {
     }
   }, [user]);
 
+  // Load connected accounts from localStorage and check their status
   const loadConnectedAccounts = async () => {
     setIsLoading(true);
     try {
+      // Load persisted accounts from localStorage
+      const persistedAccounts = loadPersistedAccounts();
+      
       // Check Gmail connection status
       const isGmailConnected = gmailService.isConnected();
-      const accounts: ConnectedAccount[] = [];
+      const accounts: ConnectedAccount[] = [...persistedAccounts];
 
       if (isGmailConnected) {
         try {
           const userInfo = await gmailService.getUserInfo();
           const unreadCount = await gmailService.getUnreadCount();
           
-          accounts.push({
-            id: 'gmail-' + userInfo.email,
+          const gmailAccountId = 'gmail-' + userInfo.email;
+          
+          // Check if this Gmail account is already in persisted accounts
+          const existingAccountIndex = accounts.findIndex(acc => acc.id === gmailAccountId);
+          
+          const gmailAccount: ConnectedAccount = {
+            id: gmailAccountId,
             type: 'gmail',
             email: userInfo.email,
             name: userInfo.name || userInfo.email,
@@ -69,11 +78,23 @@ const EmailDashboard: React.FC = () => {
             lastSync: new Date().toISOString(),
             unreadCount: unreadCount,
             status: 'active'
-          });
+          };
+          
+          if (existingAccountIndex >= 0) {
+            // Update existing account
+            accounts[existingAccountIndex] = gmailAccount;
+          } else {
+            // Add new account
+            accounts.push(gmailAccount);
+          }
+          
+          // Persist the updated accounts
+          persistAccounts(accounts);
+          
         } catch (error) {
           console.error('Failed to get Gmail user info:', error);
           // Still show the account but with error status
-          accounts.push({
+          const errorAccount: ConnectedAccount = {
             id: 'gmail-error',
             type: 'gmail',
             email: 'Gmail Account',
@@ -81,7 +102,8 @@ const EmailDashboard: React.FC = () => {
             isConnected: true,
             status: 'error',
             errorMessage: 'Failed to load account details. Please refresh or reconnect.'
-          });
+          };
+          accounts.push(errorAccount);
         }
       }
 
@@ -95,6 +117,31 @@ const EmailDashboard: React.FC = () => {
       console.error('Failed to load connected accounts:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Load persisted accounts from localStorage
+  const loadPersistedAccounts = (): ConnectedAccount[] => {
+    try {
+      const stored = localStorage.getItem('aima_connected_accounts');
+      if (stored) {
+        const accounts = JSON.parse(stored);
+        console.log('📧 Loaded persisted accounts:', accounts.length);
+        return accounts;
+      }
+    } catch (error) {
+      console.error('Failed to load persisted accounts:', error);
+    }
+    return [];
+  };
+
+  // Persist accounts to localStorage
+  const persistAccounts = (accounts: ConnectedAccount[]) => {
+    try {
+      localStorage.setItem('aima_connected_accounts', JSON.stringify(accounts));
+      console.log('💾 Persisted accounts:', accounts.length);
+    } catch (error) {
+      console.error('Failed to persist accounts:', error);
     }
   };
 
@@ -114,7 +161,7 @@ const EmailDashboard: React.FC = () => {
         
         if (success) {
           console.log('✅ Gmail connection successful!');
-          await loadConnectedAccounts();
+          await loadConnectedAccounts(); // This will persist the account
           setShowAddAccountModal(false);
         } else {
           console.error('❌ Gmail connection returned false');
@@ -157,7 +204,11 @@ const EmailDashboard: React.FC = () => {
       }
       
       // Remove from connected accounts
-      setConnectedAccounts(prev => prev.filter(acc => acc.id !== accountId));
+      const updatedAccounts = connectedAccounts.filter(acc => acc.id !== accountId);
+      setConnectedAccounts(updatedAccounts);
+      
+      // Persist the updated accounts
+      persistAccounts(updatedAccounts);
       
       // Clear selection if this was the selected account
       if (selectedAccount?.id === accountId) {
@@ -188,10 +239,10 @@ const EmailDashboard: React.FC = () => {
         const unreadCount = await gmailService.getUnreadCount();
         
         // Update account with new data
-        setConnectedAccounts(prev => prev.map(acc => 
+        const updatedAccounts = connectedAccounts.map(acc => 
           acc.id === accountId ? { 
             ...acc, 
-            status: 'active',
+            status: 'active' as const,
             lastSync: new Date().toISOString(),
             unreadCount: unreadCount,
             name: userInfo.name || userInfo.email,
@@ -199,7 +250,10 @@ const EmailDashboard: React.FC = () => {
             avatar: userInfo.picture,
             errorMessage: undefined
           } : acc
-        ));
+        );
+        
+        setConnectedAccounts(updatedAccounts);
+        persistAccounts(updatedAccounts);
         
         console.log('✅ Account refreshed successfully');
       }
@@ -208,7 +262,7 @@ const EmailDashboard: React.FC = () => {
       setConnectedAccounts(prev => prev.map(acc => 
         acc.id === accountId ? { 
           ...acc, 
-          status: 'error',
+          status: 'error' as const,
           errorMessage: 'Failed to refresh account. Please try reconnecting.'
         } : acc
       ));

@@ -491,7 +491,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
     return hasValidToken;
   }
 
-  async checkAvailability(date: string, participants: string[]): Promise<AvailabilityResponse> {
+  async checkAvailability(date: string, participants: string[], preferredTime?: string): Promise<AvailabilityResponse> {
     if (!this.isConnected()) {
       throw new Error('Google Calendar not connected');
     }
@@ -501,7 +501,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
         message: 'Checking calendar availability',
         category: 'calendar',
         level: 'info',
-        data: { date, participantCount: participants.length },
+        data: { date, participantCount: participants.length, preferredTime },
       });
 
       const startDate = new Date(date);
@@ -519,7 +519,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
       
       // Generate available time slots
       const availableSlots = this.generateAvailableSlots(date, busyTimes);
-      const suggestedTimes = availableSlots.slice(0, 4).map(slot => slot.start);
+      const suggestedTimes = this.generateSuggestedTimesWithPreference(availableSlots, preferredTime);
 
       return {
         date,
@@ -530,10 +530,125 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
       console.error('Failed to check availability:', error);
       Sentry.captureException(error, {
         tags: { component: 'google-calendar-availability' },
-        extra: { date, participantCount: participants.length },
+        extra: { date, participantCount: participants.length, preferredTime },
       });
       throw new Error('Failed to check calendar availability');
     }
+  }
+
+  private generateSuggestedTimesWithPreference(availableSlots: any[], preferredTime?: string): string[] {
+    const suggestions: string[] = [];
+    
+    // First, check if the preferred time from AI parsing is available
+    if (preferredTime) {
+      const extractedTime = this.extractTimeFromDateTime(preferredTime);
+      if (extractedTime) {
+        const isPreferredAvailable = availableSlots.some(slot => 
+          slot.start === extractedTime || 
+          this.isTimeWithinSlot(extractedTime, slot)
+        );
+        
+        if (isPreferredAvailable) {
+          console.log(`✨ Preferred time ${extractedTime} is available! Adding as first suggestion.`);
+          suggestions.push(extractedTime);
+        }
+      }
+    }
+    
+    // Add other available times, avoiding duplicates
+    for (const slot of availableSlots) {
+      if (!suggestions.includes(slot.start)) {
+        suggestions.push(slot.start);
+      }
+      if (suggestions.length >= 4) break; // Limit to 4 suggestions
+    }
+    
+    return suggestions;
+  }
+
+  private extractTimeFromDateTime(datetime: string): string | null {
+    try {
+      // Handle various datetime formats and extract time
+      console.log('🕐 Extracting time from:', datetime);
+      
+      // Pattern 1: "May 30, 2024 at 11:30 AM GMT+3"
+      const timePattern1 = /at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i;
+      const match1 = datetime.match(timePattern1);
+      if (match1) {
+        let hour = parseInt(match1[1]);
+        const minute = match1[2];
+        const ampm = match1[3]?.toUpperCase();
+        
+        if (ampm === 'PM' && hour !== 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+        
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
+        console.log('🕐 Extracted time (pattern 1):', timeString);
+        return timeString;
+      }
+      
+      // Pattern 2: "June 30, 2025 Time: 4:00 PM"
+      const timePattern2 = /Time:\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i;
+      const match2 = datetime.match(timePattern2);
+      if (match2) {
+        let hour = parseInt(match2[1]);
+        const minute = match2[2];
+        const ampm = match2[3]?.toUpperCase();
+        
+        if (ampm === 'PM' && hour !== 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+        
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
+        console.log('🕐 Extracted time (pattern 2):', timeString);
+        return timeString;
+      }
+      
+      // Pattern 3: Try to parse as ISO date
+      const isoMatch = datetime.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
+      if (isoMatch) {
+        const date = new Date(isoMatch[1]);
+        if (!isNaN(date.getTime())) {
+          const timeString = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+          console.log('🕐 Extracted time (ISO):', timeString);
+          return timeString;
+        }
+      }
+      
+      // Pattern 4: Simple time patterns like "14:30" or "2:30 PM"
+      const simpleTimePattern = /(\d{1,2}):(\d{2})\s*(AM|PM)?/i;
+      const simpleMatch = datetime.match(simpleTimePattern);
+      if (simpleMatch) {
+        let hour = parseInt(simpleMatch[1]);
+        const minute = simpleMatch[2];
+        const ampm = simpleMatch[3]?.toUpperCase();
+        
+        if (ampm === 'PM' && hour !== 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+        
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
+        console.log('🕐 Extracted time (simple):', timeString);
+        return timeString;
+      }
+      
+      console.log('⚠️ Could not extract time from:', datetime);
+      return null;
+    } catch (error) {
+      console.error('❌ Error extracting time:', error);
+      return null;
+    }
+  }
+
+  private isTimeWithinSlot(time: string, slot: any): boolean {
+    const timeMinutes = this.timeToMinutes(time);
+    const slotStart = this.timeToMinutes(slot.start);
+    const slotEnd = this.timeToMinutes(slot.end);
+    
+    return timeMinutes >= slotStart && timeMinutes < slotEnd;
+  }
+
+  private timeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
   }
 
   async scheduleEvent(request: ScheduleRequest): Promise<CalendarEvent> {
