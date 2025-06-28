@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, AlertCircle, CheckCircle, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -18,6 +18,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ initialMode = 'signin', onClose }
   const [success, setSuccess] = useState<string>('');
 
   const { signIn, signUp } = useAuth();
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,22 +70,32 @@ const AuthModal: React.FC<AuthModalProps> = ({ initialMode = 'signin', onClose }
     setFullName('');
   };
 
-  const handleClose = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleClose = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     onClose();
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
-      onClose();
+      handleClose();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      handleClose();
     }
   };
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]"
       onClick={handleBackdropClick}
+      onKeyDown={handleKeyDown}
+      tabIndex={-1}
     >
       {/* Animated background pattern */}
       <div className="absolute inset-0 opacity-10">
@@ -87,12 +105,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ initialMode = 'signin', onClose }
       </div>
 
       <div className="relative z-10 w-full max-w-md">
-        <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20 relative">
-          {/* Close Button - Fixed positioning and click handling */}
+        <div 
+          className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20 relative"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Close Button - Fixed positioning and improved visibility */}
           <button
             onClick={handleClose}
-            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200 z-10"
+            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white hover:bg-white/20 rounded-lg transition-all duration-200 z-20 bg-black/20"
             type="button"
+            aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>

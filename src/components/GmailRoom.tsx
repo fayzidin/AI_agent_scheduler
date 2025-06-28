@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Calendar, Users, Clock, Star, CheckCircle, AlertCircle, Loader2, Send, Brain, RefreshCw, ExternalLink, Shield, Settings, Info, Filter, Inbox, MailSearch as MarkEmailRead } from 'lucide-react';
+import { Mail, Calendar, Users, Clock, Star, CheckCircle, AlertCircle, Loader2, Send, Brain, RefreshCw, ExternalLink, Shield, Settings, Info, Filter, Inbox, MarkEmailRead } from 'lucide-react';
 import { gmailService } from '../services/gmailService';
 import { openaiService } from '../services/openaiService';
 import { calendarService } from '../services/calendarService';
@@ -196,9 +196,11 @@ const GmailRoom: React.FC = () => {
         }
       } else {
         console.log('❌ AI parsing failed or no meeting intent detected');
+        setParsedData(null);
       }
     } catch (error) {
       console.error('❌ Failed to parse email with AI:', error);
+      setParsedData(null);
     } finally {
       setIsParsing(false);
     }
@@ -632,7 +634,7 @@ const GmailRoom: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Schedule Button */}
+                        {/* Schedule Button - Only show for schedule_meeting intent */}
                         {parsedData.intent === 'schedule_meeting' && (
                           <button
                             onClick={handleScheduleMeeting}
@@ -647,6 +649,21 @@ const GmailRoom: React.FC = () => {
                             <span>{isScheduling ? 'Scheduling...' : 'Schedule Meeting'}</span>
                           </button>
                         )}
+                      </div>
+                    )}
+
+                    {/* Show message if no meeting intent detected */}
+                    {!isParsing && !parsedData && selectedMessage && (
+                      <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+                        <div className="flex items-center">
+                          <Info className="w-5 h-5 text-yellow-400 mr-3" />
+                          <div>
+                            <p className="text-yellow-300 font-semibold">No Meeting Intent Detected</p>
+                            <p className="text-yellow-200 text-sm">
+                              This email doesn't appear to contain meeting scheduling information. Try selecting an email with meeting requests.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

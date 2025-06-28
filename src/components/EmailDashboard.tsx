@@ -43,7 +43,7 @@ const EmailDashboard: React.FC = () => {
 
   useEffect(() => {
     loadConnectedAccounts();
-  }, []);
+  }, [user]);
 
   const loadConnectedAccounts = async () => {
     setIsLoading(true);
@@ -70,21 +70,22 @@ const EmailDashboard: React.FC = () => {
           });
         } catch (error) {
           console.error('Failed to get Gmail user info:', error);
+          // Still show the account but with error status
           accounts.push({
             id: 'gmail-error',
             type: 'gmail',
             email: 'Gmail Account',
             name: 'Gmail Account',
-            isConnected: false,
+            isConnected: true,
             status: 'error',
-            errorMessage: 'Failed to load account details'
+            errorMessage: 'Failed to load account details. Please refresh.'
           });
         }
       }
 
       setConnectedAccounts(accounts);
       
-      // Auto-select first account if available
+      // Auto-select first account if available and no account is currently selected
       if (accounts.length > 0 && !selectedAccount) {
         setSelectedAccount(accounts[0]);
       }
@@ -180,6 +181,8 @@ const EmailDashboard: React.FC = () => {
 
     try {
       if (account.type === 'gmail') {
+        // Try to get user info to verify connection
+        const userInfo = await gmailService.getUserInfo();
         const unreadCount = await gmailService.getUnreadCount();
         
         // Update account with new data
@@ -188,7 +191,11 @@ const EmailDashboard: React.FC = () => {
             ...acc, 
             status: 'active',
             lastSync: new Date().toISOString(),
-            unreadCount: unreadCount
+            unreadCount: unreadCount,
+            name: userInfo.name || userInfo.email,
+            email: userInfo.email,
+            avatar: userInfo.picture,
+            errorMessage: undefined
           } : acc
         ));
         
@@ -200,7 +207,7 @@ const EmailDashboard: React.FC = () => {
         acc.id === accountId ? { 
           ...acc, 
           status: 'error',
-          errorMessage: 'Failed to refresh account'
+          errorMessage: 'Failed to refresh account. Please try reconnecting.'
         } : acc
       ));
     }
