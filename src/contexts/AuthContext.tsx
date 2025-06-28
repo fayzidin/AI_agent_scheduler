@@ -54,16 +54,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return;
         }
 
-        // Get initial session with increased timeout and retry logic
+        // Get initial session with improved retry logic
         let sessionResult = null;
         let retryCount = 0;
-        const maxRetries = 3;
+        const maxRetries = 2; // Reduced retries for faster loading
 
         while (retryCount < maxRetries && !sessionResult) {
           try {
             const sessionPromise = supabase.auth.getSession();
             const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Session fetch timeout')), 15000)
+              setTimeout(() => reject(new Error('Session fetch timeout')), 8000) // Reduced timeout
             );
 
             sessionResult = await Promise.race([sessionPromise, timeoutPromise]) as any;
@@ -72,7 +72,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             retryCount++;
             console.warn(`Session fetch attempt ${retryCount} failed:`, error);
             if (retryCount < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced wait time
             }
           }
         }
@@ -165,10 +165,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         data: { userId },
       });
 
-      // Retry logic for profile loading
+      // Simplified profile loading with shorter timeout
       let profileResult = null;
       let retryCount = 0;
-      const maxRetries = 3;
+      const maxRetries = 2; // Reduced retries
 
       while (retryCount < maxRetries && !profileResult) {
         try {
@@ -179,7 +179,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             .maybeSingle();
 
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Profile fetch timeout')), 20000)
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 10000) // Reduced timeout
           );
 
           profileResult = await Promise.race([profilePromise, timeoutPromise]) as any;
@@ -188,13 +188,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           retryCount++;
           console.warn(`Profile fetch attempt ${retryCount} failed:`, error);
           if (retryCount < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds before retry
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Reduced wait time
           }
         }
       }
 
       if (!profileResult) {
         console.warn('Failed to load profile after retries');
+        // Continue without profile instead of staying in loading state
+        setProfile(null);
         setLoading(false);
         return;
       }
@@ -202,7 +204,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const { data, error } = profileResult;
 
       if (error) {
-        throw error;
+        console.error('Profile loading error:', error);
+        setProfile(null);
       } else if (data) {
         setProfile(data);
         Sentry.setContext('user_profile', {
@@ -217,6 +220,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         tags: { component: 'profile-loading' },
         extra: { userId },
       });
+      setProfile(null);
     } finally {
       setLoading(false);
     }

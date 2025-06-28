@@ -100,7 +100,7 @@ ${cleanedContent}
 
 Return only valid JSON with the extracted information.`;
 
-      // Use GPT-3.5-turbo instead of GPT-4 for better compatibility and lower cost
+      // Use GPT-3.5-turbo for better compatibility and lower cost
       const completion = await this.client.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
@@ -109,7 +109,7 @@ Return only valid JSON with the extracted information.`;
         ],
         temperature: 0.1,
         max_tokens: 500
-        // Removed response_format parameter as it's not supported with all models
+        // Removed response_format parameter for better compatibility
       });
 
       const responseContent = completion.choices[0]?.message?.content;

@@ -21,6 +21,7 @@ const GmailRoom: React.FC = () => {
   const [connectionError, setConnectionError] = useState<string>('');
   const [userInfo, setUserInfo] = useState<any>(null);
   const [emailFilter, setEmailFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [showCalendarIntegration, setShowCalendarIntegration] = useState(false);
 
   useEffect(() => {
     checkConnection();
@@ -121,6 +122,7 @@ const GmailRoom: React.FC = () => {
       setParsedData(null);
       setUserInfo(null);
       setConnectionError('');
+      setShowCalendarIntegration(false);
       console.log('✅ Disconnected from Gmail successfully');
     } catch (error) {
       console.error('❌ Failed to disconnect Gmail:', error);
@@ -171,6 +173,7 @@ const GmailRoom: React.FC = () => {
   const parseEmailWithAI = async (message: EmailMessage) => {
     setIsParsing(true);
     setParsedData(null);
+    setShowCalendarIntegration(false);
     
     try {
       console.log(`🤖 Parsing email with AI: "${message.subject}"`);
@@ -207,17 +210,21 @@ const GmailRoom: React.FC = () => {
   };
 
   const handleScheduleMeeting = async () => {
-    if (!parsedData || !selectedMessage) return;
+    if (!parsedData || !selectedMessage) {
+      console.error('❌ No parsed data or selected message for scheduling');
+      return;
+    }
 
+    console.log(`📅 Starting meeting scheduling process for: ${parsedData.contactName}`);
     setIsScheduling(true);
+    setShowCalendarIntegration(true);
+    
     try {
-      console.log(`📅 Scheduling meeting for: ${parsedData.contactName}`);
-      
-      // This will trigger the CalendarIntegration component
-      // which handles the actual scheduling logic
-      
+      // The CalendarIntegration component will handle the actual scheduling
+      console.log('✅ Calendar integration component will handle scheduling');
     } catch (error) {
-      console.error('❌ Failed to schedule meeting:', error);
+      console.error('❌ Failed to initiate scheduling:', error);
+      setShowCalendarIntegration(false);
     } finally {
       setIsScheduling(false);
     }
@@ -364,7 +371,7 @@ const GmailRoom: React.FC = () => {
                 className="w-10 h-10 rounded-lg mr-3"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = 'https://via.placeholder.com/40';
+                  target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userInfo.name)}&background=4285f4&color=fff&size=40`;
                 }}
               />
               <div>
@@ -646,7 +653,7 @@ const GmailRoom: React.FC = () => {
                             ) : (
                               <Calendar className="w-5 h-5" />
                             )}
-                            <span>{isScheduling ? 'Scheduling...' : 'Schedule Meeting'}</span>
+                            <span>{isScheduling ? 'Preparing Schedule...' : 'Schedule Meeting'}</span>
                           </button>
                         )}
                       </div>
@@ -682,13 +689,14 @@ const GmailRoom: React.FC = () => {
         </div>
       )}
 
-      {/* Calendar Integration - Auto-triggered when Schedule button is clicked */}
-      {parsedData && parsedData.intent === 'schedule_meeting' && isScheduling && (
+      {/* Calendar Integration - Show when Schedule button is clicked */}
+      {showCalendarIntegration && parsedData && parsedData.intent === 'schedule_meeting' && (
         <CalendarIntegration 
           parsedData={parsedData}
           emailContent={selectedMessage?.body.text}
           onScheduled={(event) => {
             console.log('✅ Meeting scheduled successfully:', event);
+            setShowCalendarIntegration(false);
             setIsScheduling(false);
           }}
         />
