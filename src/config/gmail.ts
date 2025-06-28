@@ -18,9 +18,9 @@ export const getGmailConfig = (): GmailConfig => {
     apiKey: apiKey || '',
     discoveryDocs: [
       'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest',
-      'https://www.googleapis.com/discovery/v1/apis/oauth2/v2/rest'
+      'https://www.googleapis.com/discovery/v1/apis/people/v1/rest'
     ],
-    // Updated scopes for full Gmail access
+    // Updated scopes for better compatibility
     scopes: [
       'https://www.googleapis.com/auth/gmail.readonly', // Read Gmail emails
       'https://www.googleapis.com/auth/gmail.modify', // Modify Gmail emails (mark as read, star)

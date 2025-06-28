@@ -80,7 +80,7 @@ const EmailDashboard: React.FC = () => {
             name: 'Gmail Account',
             isConnected: true,
             status: 'error',
-            errorMessage: 'Failed to load account details. Please refresh.'
+            errorMessage: 'Failed to load account details. Please refresh or reconnect.'
           });
         }
       }
@@ -325,6 +325,10 @@ const EmailDashboard: React.FC = () => {
                                 src={account.avatar}
                                 alt={account.name}
                                 className="w-10 h-10 rounded-lg object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(account.name)}&background=4285f4&color=fff&size=40`;
+                                }}
                               />
                             ) : (
                               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
