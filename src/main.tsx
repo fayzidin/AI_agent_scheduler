@@ -4,7 +4,7 @@ import * as Sentry from '@sentry/react';
 import App from './App.tsx';
 import './index.css';
 
-// Initialize Sentry
+// Initialize Sentry with updated configuration
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN || '', // Add your Sentry DSN to .env
   environment: import.meta.env.VITE_ENVIRONMENT || 'development',
@@ -18,15 +18,13 @@ Sentry.init({
         /^https:\/\/.*\.googleapis\.com/,
       ],
     }),
-    new Sentry.Replay({
-      // Capture 10% of all sessions in production
-      sessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
-      // Capture 100% of sessions with an error
-      errorSampleRate: 1.0,
-    }),
+    new Sentry.Replay(),
   ],
   // Performance Monitoring
   tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+  // Session Replay - Updated configuration
+  replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+  replaysOnErrorSampleRate: 1.0,
   // Release Health
   autoSessionTracking: true,
   // Debug mode in development

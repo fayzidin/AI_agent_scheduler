@@ -82,7 +82,7 @@ CRITICAL PARSING RULES:
    - "invite you to a meeting" → "schedule_meeting"
    - "discuss our project" → "schedule_meeting"
 
-RESPONSE FORMAT (JSON only):
+Return your response as valid JSON with this exact structure:
 {
   "contactName": "Actual sender name",
   "email": "sender@domain.com",
@@ -100,15 +100,16 @@ ${cleanedContent}
 
 Return only valid JSON with the extracted information.`;
 
+      // Use GPT-3.5-turbo instead of GPT-4 for better compatibility and lower cost
       const completion = await this.client.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.1,
-        max_tokens: 500,
-        response_format: { type: "json_object" }
+        max_tokens: 500
+        // Removed response_format parameter as it's not supported with all models
       });
 
       const responseContent = completion.choices[0]?.message?.content;
@@ -118,7 +119,11 @@ Return only valid JSON with the extracted information.`;
       }
 
       try {
-        const parsedData = JSON.parse(responseContent) as ParsedEmailData;
+        // Extract JSON from response if it's wrapped in markdown or other text
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        
+        const parsedData = JSON.parse(jsonString) as ParsedEmailData;
         
         // Validate and clean the response
         const cleanedData = this.validateAndCleanResponse(parsedData, cleanedContent);
@@ -130,6 +135,18 @@ Return only valid JSON with the extracted information.`;
         };
       } catch (parseError) {
         console.error('Failed to parse OpenAI JSON response:', parseError);
+        console.log('Raw response:', responseContent);
+        
+        // Try to extract data manually from the response
+        const manuallyParsed = this.manuallyParseResponse(responseContent, cleanedContent);
+        if (manuallyParsed) {
+          return {
+            success: true,
+            data: manuallyParsed,
+            rawResponse: responseContent
+          };
+        }
+        
         return {
           success: false,
           error: 'Invalid JSON response from AI',
@@ -157,6 +174,36 @@ Return only valid JSON with the extracted information.`;
       console.log('Falling back to enhanced mock parsing due to API error');
       return this.fallbackParsing(cleanedContent);
     }
+  }
+
+  private manuallyParseResponse(response: string, originalEmail: string): ParsedEmailData | null {
+    try {
+      // Try to extract key information from the response text
+      const contactName = this.extractContactName(originalEmail);
+      const company = this.extractCompanyName(originalEmail);
+      const email = this.extractEmail(originalEmail);
+      const datetime = this.parseDateTime(originalEmail);
+      const intent = this.detectIntent(originalEmail);
+      
+      return {
+        contactName,
+        email,
+        company,
+        datetime,
+        participants: [email],
+        intent,
+        confidence: 0.75,
+        reasoning: 'Manually parsed from AI response'
+      };
+    } catch (error) {
+      console.error('Manual parsing failed:', error);
+      return null;
+    }
+  }
+
+  private extractEmail(text: string): string {
+    const emailMatch = text.match(/[\w.-]+@[\w.-]+\.\w+/);
+    return emailMatch ? emailMatch[0] : 'no-email@example.com';
   }
 
   private cleanEmailContent(content: string): string {

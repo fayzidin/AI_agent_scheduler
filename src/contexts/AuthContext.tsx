@@ -54,16 +54,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return;
         }
 
-        // Get initial session with timeout
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session fetch timeout')), 10000)
-        );
+        // Get initial session with increased timeout and retry logic
+        let sessionResult = null;
+        let retryCount = 0;
+        const maxRetries = 3;
 
-        const { data: { session }, error } = await Promise.race([
-          sessionPromise,
-          timeoutPromise
-        ]) as any;
+        while (retryCount < maxRetries && !sessionResult) {
+          try {
+            const sessionPromise = supabase.auth.getSession();
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Session fetch timeout')), 15000)
+            );
+
+            sessionResult = await Promise.race([sessionPromise, timeoutPromise]) as any;
+            break;
+          } catch (error) {
+            retryCount++;
+            console.warn(`Session fetch attempt ${retryCount} failed:`, error);
+            if (retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+            }
+          }
+        }
+
+        if (!sessionResult) {
+          console.warn('Failed to get session after retries, continuing without session');
+          setLoading(false);
+          return;
+        }
+
+        const { data: { session }, error } = sessionResult;
 
         if (error) {
           throw error;
@@ -145,20 +165,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         data: { userId },
       });
 
-      const profilePromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      // Retry logic for profile loading
+      let profileResult = null;
+      let retryCount = 0;
+      const maxRetries = 3;
 
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 15000)
-      );
+      while (retryCount < maxRetries && !profileResult) {
+        try {
+          const profilePromise = supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
 
-      const { data, error } = await Promise.race([
-        profilePromise,
-        timeoutPromise
-      ]) as any;
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 20000)
+          );
+
+          profileResult = await Promise.race([profilePromise, timeoutPromise]) as any;
+          break;
+        } catch (error) {
+          retryCount++;
+          console.warn(`Profile fetch attempt ${retryCount} failed:`, error);
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds before retry
+          }
+        }
+      }
+
+      if (!profileResult) {
+        console.warn('Failed to load profile after retries');
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = profileResult;
 
       if (error) {
         throw error;
