@@ -16,8 +16,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gmailService } from '../services/gmailService';
+import { outlookService } from '../services/outlookService';
 import { isGmailConfigured } from '../config/gmail';
+import { isOutlookConfigured } from '../config/outlook';
 import GmailRoom from './GmailRoom';
+import OutlookRoom from './OutlookRoom';
 import AddAccountModal from './AddAccountModal';
 
 interface ConnectedAccount {
@@ -107,6 +110,58 @@ const EmailDashboard: React.FC = () => {
         }
       }
 
+      // Check Outlook connection status
+      const isOutlookConnected = outlookService.isConnected();
+      
+      if (isOutlookConnected) {
+        try {
+          const userInfo = await outlookService.getUserInfo();
+          const unreadCount = await outlookService.getUnreadCount();
+          
+          const outlookAccountId = 'outlook-' + userInfo.email;
+          
+          // Check if this Outlook account is already in persisted accounts
+          const existingAccountIndex = accounts.findIndex(acc => acc.id === outlookAccountId);
+          
+          const outlookAccount: ConnectedAccount = {
+            id: outlookAccountId,
+            type: 'outlook',
+            email: userInfo.email,
+            name: userInfo.name || userInfo.email,
+            avatar: userInfo.picture,
+            isConnected: true,
+            lastSync: new Date().toISOString(),
+            unreadCount: unreadCount,
+            status: 'active'
+          };
+          
+          if (existingAccountIndex >= 0) {
+            // Update existing account
+            accounts[existingAccountIndex] = outlookAccount;
+          } else {
+            // Add new account
+            accounts.push(outlookAccount);
+          }
+          
+          // Persist the updated accounts
+          persistAccounts(accounts);
+          
+        } catch (error) {
+          console.error('Failed to get Outlook user info:', error);
+          // Still show the account but with error status
+          const errorAccount: ConnectedAccount = {
+            id: 'outlook-error',
+            type: 'outlook',
+            email: 'Outlook Account',
+            name: 'Outlook Account',
+            isConnected: true,
+            status: 'error',
+            errorMessage: 'Failed to load account details. Please refresh or reconnect.'
+          };
+          accounts.push(errorAccount);
+        }
+      }
+
       setConnectedAccounts(accounts);
       
       // Auto-select first account if available and no account is currently selected
@@ -188,6 +243,44 @@ const EmailDashboard: React.FC = () => {
         // You could show this error in the UI
         alert(`Gmail Connection Failed: ${errorMessage}`);
       }
+    } else if (accountType === 'outlook') {
+      try {
+        console.log('📧 Starting Outlook connection process...');
+        
+        // Check if Outlook is configured
+        if (!isOutlookConfigured()) {
+          console.warn('⚠️ Outlook API not configured - will use mock mode');
+        }
+        
+        const success = await outlookService.signIn();
+        
+        if (success) {
+          console.log('✅ Outlook connection successful!');
+          await loadConnectedAccounts(); // This will persist the account
+          setShowAddAccountModal(false);
+        } else {
+          console.error('❌ Outlook connection returned false');
+          throw new Error('Outlook authentication failed');
+        }
+      } catch (error: any) {
+        console.error('❌ Outlook connection failed:', error);
+        
+        // Show user-friendly error message
+        let errorMessage = 'Failed to connect Outlook account';
+        
+        if (error.message?.includes('not configured')) {
+          errorMessage = 'Outlook API not configured. Please add your Microsoft API credentials.';
+        } else if (error.message?.includes('popup_blocked')) {
+          errorMessage = 'Popup blocked. Please allow popups for this site and try again.';
+        } else if (error.message?.includes('access_denied')) {
+          errorMessage = 'Access denied. Please grant permission to access your Outlook account.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        // You could show this error in the UI
+        alert(`Outlook Connection Failed: ${errorMessage}`);
+      }
     }
     // Other account types will be implemented in future steps
   };
@@ -201,6 +294,8 @@ const EmailDashboard: React.FC = () => {
       
       if (account.type === 'gmail') {
         await gmailService.signOut();
+      } else if (account.type === 'outlook') {
+        await outlookService.signOut();
       }
       
       // Remove from connected accounts
@@ -237,6 +332,29 @@ const EmailDashboard: React.FC = () => {
         // Try to get user info to verify connection
         const userInfo = await gmailService.getUserInfo();
         const unreadCount = await gmailService.getUnreadCount();
+        
+        // Update account with new data
+        const updatedAccounts = connectedAccounts.map(acc => 
+          acc.id === accountId ? { 
+            ...acc, 
+            status: 'active' as const,
+            lastSync: new Date().toISOString(),
+            unreadCount: unreadCount,
+            name: userInfo.name || userInfo.email,
+            email: userInfo.email,
+            avatar: userInfo.picture,
+            errorMessage: undefined
+          } : acc
+        );
+        
+        setConnectedAccounts(updatedAccounts);
+        persistAccounts(updatedAccounts);
+        
+        console.log('✅ Account refreshed successfully');
+      } else if (account.type === 'outlook') {
+        // Try to get user info to verify connection
+        const userInfo = await outlookService.getUserInfo();
+        const unreadCount = await outlookService.getUnreadCount();
         
         // Update account with new data
         const updatedAccounts = connectedAccounts.map(acc => 
@@ -381,11 +499,15 @@ const EmailDashboard: React.FC = () => {
                                 className="w-10 h-10 rounded-lg object-cover"
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement;
-                                  target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(account.name)}&background=4285f4&color=fff&size=40`;
+                                  target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(account.name)}&background=${account.type === 'gmail' ? '4285f4' : '0078d4'}&color=fff&size=40`;
                                 }}
                               />
                             ) : (
-                              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                account.type === 'gmail' 
+                                  ? 'bg-gradient-to-r from-red-500 to-orange-600' 
+                                  : 'bg-gradient-to-r from-blue-500 to-blue-700'
+                              }`}>
                                 <Mail className="w-5 h-5 text-white" />
                               </div>
                             )}
@@ -401,7 +523,7 @@ const EmailDashboard: React.FC = () => {
                                 {account.name}
                               </p>
                               <span className="text-xs px-2 py-1 bg-white/10 text-white rounded">
-                                {account.type.toUpperCase()}
+                                {account.type === 'gmail' ? 'GMAIL' : 'OUTLOOK'}
                               </span>
                             </div>
                             <p className="text-indigo-200 text-xs truncate">{account.email}</p>
@@ -513,6 +635,10 @@ const EmailDashboard: React.FC = () => {
                 <div>
                   {selectedAccount.type === 'gmail' && selectedAccount.status === 'active' && (
                     <GmailRoom />
+                  )}
+                  
+                  {selectedAccount.type === 'outlook' && selectedAccount.status === 'active' && (
+                    <OutlookRoom />
                   )}
                   
                   {selectedAccount.status === 'error' && (

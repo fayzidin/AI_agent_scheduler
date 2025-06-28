@@ -1,6 +1,8 @@
 import { CalendarProvider, AvailabilityResponse, CalendarEvent, ScheduleRequest, TimeSlot, EventSearchResult, RescheduleRequest } from '../types/calendar';
 import { googleCalendarService } from './googleCalendarService';
+import { outlookCalendarService } from './outlookCalendarService';
 import { isGoogleConfigured } from '../config/google';
+import { isOutlookConfigured } from '../config/outlook';
 
 class CalendarService {
   private providers: CalendarProvider[] = [
@@ -54,6 +56,15 @@ class CalendarService {
         }
       });
     }
+    
+    // Initialize Outlook Calendar if configured
+    if (isOutlookConfigured()) {
+      outlookCalendarService.initialize().then((success) => {
+        if (success) {
+          console.log('Outlook Calendar service initialized');
+        }
+      });
+    }
   }
 
   getProviders(): CalendarProvider[] {
@@ -61,6 +72,12 @@ class CalendarService {
     const googleProvider = this.providers.find(p => p.id === 'google');
     if (googleProvider) {
       googleProvider.connected = googleCalendarService.isConnected();
+    }
+    
+    // Update Outlook provider status
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
+    if (outlookProvider) {
+      outlookProvider.connected = outlookCalendarService.isConnected();
     }
     
     return this.providers;
@@ -75,6 +92,17 @@ class CalendarService {
       const success = await googleCalendarService.signIn();
       if (success) {
         const provider = this.providers.find(p => p.id === 'google');
+        if (provider) provider.connected = true;
+      }
+      return success;
+    } else if (providerId === 'outlook') {
+      if (!isOutlookConfigured()) {
+        throw new Error('Outlook Calendar API not configured. Please add your Microsoft API credentials to environment variables.');
+      }
+      
+      const success = await outlookCalendarService.signIn();
+      if (success) {
+        const provider = this.providers.find(p => p.id === 'outlook');
         if (provider) provider.connected = true;
       }
       return success;
@@ -97,6 +125,11 @@ class CalendarService {
       const provider = this.providers.find(p => p.id === 'google');
       if (provider) provider.connected = false;
       return true;
+    } else if (providerId === 'outlook') {
+      await outlookCalendarService.signOut();
+      const provider = this.providers.find(p => p.id === 'outlook');
+      if (provider) provider.connected = false;
+      return true;
     }
     
     const provider = this.providers.find(p => p.id === providerId);
@@ -109,12 +142,19 @@ class CalendarService {
 
   async checkAvailability(date: string, participants: string[], preferredTime?: string): Promise<AvailabilityResponse> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       try {
         return await googleCalendarService.checkAvailability(date, participants, preferredTime);
       } catch (error) {
         console.error('Google Calendar availability check failed, falling back to mock:', error);
+      }
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      try {
+        return await outlookCalendarService.checkAvailability(date, participants, preferredTime);
+      } catch (error) {
+        console.error('Outlook Calendar availability check failed, falling back to mock:', error);
       }
     }
     
@@ -139,6 +179,7 @@ class CalendarService {
 
   async scheduleEvent(request: ScheduleRequest): Promise<CalendarEvent> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       try {
@@ -146,6 +187,13 @@ class CalendarService {
         return event;
       } catch (error) {
         console.error('Google Calendar scheduling failed, falling back to mock:', error);
+      }
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      try {
+        const event = await outlookCalendarService.scheduleEvent(request);
+        return event;
+      } catch (error) {
+        console.error('Outlook Calendar scheduling failed, falling back to mock:', error);
       }
     }
     
@@ -169,12 +217,19 @@ class CalendarService {
 
   async searchEvents(query: string, participants: string[]): Promise<EventSearchResult> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       try {
         return await googleCalendarService.searchEvents(query, participants);
       } catch (error) {
         console.error('Google Calendar search failed, falling back to mock:', error);
+      }
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      try {
+        return await outlookCalendarService.searchEvents(query, participants);
+      } catch (error) {
+        console.error('Outlook Calendar search failed, falling back to mock:', error);
       }
     }
     
@@ -230,12 +285,19 @@ class CalendarService {
 
   async rescheduleEvent(request: RescheduleRequest): Promise<CalendarEvent> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       try {
         return await googleCalendarService.rescheduleEvent(request);
       } catch (error) {
         console.error('Google Calendar reschedule failed, falling back to mock:', error);
+      }
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      try {
+        return await outlookCalendarService.rescheduleEvent(request);
+      } catch (error) {
+        console.error('Outlook Calendar reschedule failed, falling back to mock:', error);
       }
     }
     
@@ -261,12 +323,19 @@ class CalendarService {
 
   async cancelEvent(eventId: string, reason?: string): Promise<boolean> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       try {
         return await googleCalendarService.cancelEvent(eventId, reason);
       } catch (error) {
         console.error('Google Calendar cancellation failed, falling back to mock:', error);
+      }
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      try {
+        return await outlookCalendarService.cancelEvent(eventId, reason);
+      } catch (error) {
+        console.error('Outlook Calendar cancellation failed, falling back to mock:', error);
       }
     }
     
@@ -290,12 +359,19 @@ class CalendarService {
 
   async getEvents(startDate: string, endDate: string): Promise<CalendarEvent[]> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       try {
         return await googleCalendarService.getEvents(startDate, endDate);
       } catch (error) {
         console.error('Google Calendar events fetch failed, falling back to mock:', error);
+      }
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      try {
+        return await outlookCalendarService.getEvents(startDate, endDate);
+      } catch (error) {
+        console.error('Outlook Calendar events fetch failed, falling back to mock:', error);
       }
     }
     
@@ -457,9 +533,12 @@ class CalendarService {
 
   async sendCalendarInvite(event: CalendarEvent): Promise<boolean> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       return await googleCalendarService.sendCalendarInvite(event);
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      return await outlookCalendarService.sendCalendarInvite(event);
     }
     
     // Mock implementation
@@ -470,9 +549,12 @@ class CalendarService {
 
   async sendRescheduleNotification(event: CalendarEvent): Promise<boolean> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       return await googleCalendarService.sendRescheduleNotification(event);
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      return await outlookCalendarService.sendRescheduleNotification(event);
     }
     
     // Mock implementation
@@ -483,9 +565,12 @@ class CalendarService {
 
   async sendCancellationNotification(event: CalendarEvent): Promise<boolean> {
     const googleProvider = this.providers.find(p => p.id === 'google');
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
     
     if (googleProvider?.connected && googleCalendarService.isConnected()) {
       return await googleCalendarService.sendCancellationNotification(event);
+    } else if (outlookProvider?.connected && outlookCalendarService.isConnected()) {
+      return await outlookCalendarService.sendCancellationNotification(event);
     }
     
     // Mock implementation

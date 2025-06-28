@@ -1,9 +1,11 @@
-import { EmailProvider, EmailRoom, EmailMessage, EmailFilter, EmailSyncStatus, ParsedEmailResult } from '../types/email';
+import { EmailProvider, EmailMessage, EmailThread, EmailRoom, EmailFilter, EmailSyncStatus, ParsedEmailResult } from '../types/email';
 import { gmailService } from './gmailService';
+import { outlookService } from './outlookService';
 import { openaiService } from './openaiService';
 import { calendarService } from './calendarService';
 import { crmService } from './crmService';
 import { isGmailConfigured } from '../config/gmail';
+import { isOutlookConfigured } from '../config/outlook';
 
 class EmailService {
   private providers: EmailProvider[] = [
@@ -31,6 +33,12 @@ class EmailService {
     const gmailProvider = this.providers.find(p => p.id === 'gmail');
     if (gmailProvider) {
       gmailProvider.connected = gmailService.isConnected();
+    }
+    
+    // Update Outlook provider status
+    const outlookProvider = this.providers.find(p => p.id === 'outlook');
+    if (outlookProvider) {
+      outlookProvider.connected = outlookService.isConnected();
     }
     
     return this.providers;
@@ -65,9 +73,37 @@ class EmailService {
         }
       }
       return success;
+    } else if (providerId === 'outlook') {
+      if (!isOutlookConfigured()) {
+        throw new Error('Outlook API not configured. Please add your Microsoft API credentials to environment variables.');
+      }
+      
+      const success = await outlookService.signIn();
+      if (success) {
+        const provider = this.providers.find(p => p.id === 'outlook');
+        if (provider) {
+          provider.connected = true;
+          
+          // Get user info and create room
+          try {
+            const userInfo = await outlookService.getUserInfo();
+            provider.accountInfo = {
+              email: userInfo.email,
+              name: userInfo.name,
+              avatar: userInfo.picture
+            };
+            
+            // Create or update Outlook room
+            await this.createOrUpdateRoom(providerId, userInfo);
+          } catch (error) {
+            console.error('Failed to get Outlook user info:', error);
+          }
+        }
+      }
+      return success;
     }
     
-    // For other providers (Outlook), simulate connection
+    // For other providers (Yahoo, IMAP), simulate connection
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     const provider = this.providers.find(p => p.id === providerId);
@@ -89,6 +125,17 @@ class EmailService {
       
       // Remove Gmail rooms
       this.rooms = this.rooms.filter(room => room.providerId !== 'gmail');
+      return true;
+    } else if (providerId === 'outlook') {
+      await outlookService.signOut();
+      const provider = this.providers.find(p => p.id === 'outlook');
+      if (provider) {
+        provider.connected = false;
+        provider.accountInfo = undefined;
+      }
+      
+      // Remove Outlook rooms
+      this.rooms = this.rooms.filter(room => room.providerId !== 'outlook');
       return true;
     }
     
@@ -142,6 +189,12 @@ class EmailService {
       } catch (error) {
         console.error('Failed to get unread count:', error);
       }
+    } else if (providerId === 'outlook') {
+      try {
+        room.unreadCount = await outlookService.getUnreadCount();
+      } catch (error) {
+        console.error('Failed to get unread count:', error);
+      }
     }
     
     return room;
@@ -163,6 +216,8 @@ class EmailService {
 
     if (room.providerType === 'gmail') {
       return await gmailService.getMessages(filter);
+    } else if (room.providerType === 'outlook') {
+      return await outlookService.getMessages(filter);
     }
     
     // For other providers, return empty array for now
@@ -255,7 +310,8 @@ class EmailService {
           // Check availability and schedule
           const availability = await calendarService.checkAvailability(
             parseResponse.data.datetime, 
-            parseResponse.data.participants
+            parseResponse.data.participants,
+            parseResponse.data.datetime // Pass the preferred time
           );
           
           if (availability.suggestedTimes.length > 0) {
@@ -323,6 +379,8 @@ class EmailService {
 
     if (room.providerType === 'gmail') {
       return await gmailService.markAsRead(messageId);
+    } else if (room.providerType === 'outlook') {
+      return await outlookService.markAsRead(messageId);
     }
     
     return false;
@@ -334,6 +392,8 @@ class EmailService {
 
     if (room.providerType === 'gmail') {
       return await gmailService.starMessage(messageId, starred);
+    } else if (room.providerType === 'outlook') {
+      return await outlookService.starMessage(messageId, starred);
     }
     
     return false;
@@ -354,7 +414,7 @@ class EmailService {
     }, 5 * 60 * 1000); // Every 5 minutes
   }
 
-  private async autoSyncRooms(): void {
+  private async autoSyncRooms(): Promise<void> {
     const activeRooms = this.getRooms().filter(room => room.settings.autoSync);
     
     for (const room of activeRooms) {

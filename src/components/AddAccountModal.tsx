@@ -14,6 +14,7 @@ import {
   Zap
 } from 'lucide-react';
 import { isGmailConfigured } from '../config/gmail';
+import { isOutlookConfigured } from '../config/outlook';
 
 interface AddAccountModalProps {
   onClose: () => void;
@@ -70,7 +71,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
         'Advanced calendar features',
         'Enterprise security'
       ],
-      status: 'coming_soon',
+      status: isOutlookConfigured() ? 'configured' : 'not_configured',
       authMethod: 'oauth2',
       securityLevel: 'high',
       setupComplexity: 'easy',
@@ -145,9 +146,9 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
         • The app requires verification for some scopes
         • Try again and make sure to grant all requested permissions`;
       } else if (error.message?.includes('redirect_uri_mismatch')) {
-        errorMessage = 'OAuth configuration error. Please check the setup guide for instructions on configuring Google Cloud Console.';
+        errorMessage = 'OAuth configuration error. Please check the setup guide for instructions on configuring your cloud console.';
       } else if (error.message?.includes('not configured')) {
-        errorMessage = `${provider.name} API not configured. Please add your Google API credentials to environment variables.`;
+        errorMessage = `${provider.name} API not configured. Please add your API credentials to environment variables.`;
       }
       
       setConnectionError(errorMessage);
@@ -374,6 +375,25 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                   </div>
                 )}
 
+                {/* Read-Only Notice for Outlook */}
+                {selectedProvider === provider.id && provider.id === 'outlook' && provider.status === 'configured' && (
+                  <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <div className="flex items-start space-x-3">
+                      <Info className="w-5 h-5 text-blue-400 mt-0.5" />
+                      <div>
+                        <h4 className="text-blue-300 font-semibold text-sm">Read-Only Access</h4>
+                        <p className="text-blue-200 text-sm mt-1">
+                          This connection uses read-only permissions to access your Outlook emails and calendar. 
+                          You can read emails and extract meeting information, but cannot modify emails or send messages.
+                        </p>
+                        <div className="mt-2 text-xs text-blue-300">
+                          <strong>Permissions:</strong> Mail.Read, User.Read, Calendars.Read
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Setup Instructions for Not Configured */}
                 {selectedProvider === provider.id && provider.status === 'not_configured' && (
                   <div className="mt-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
@@ -389,16 +409,22 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                               for detailed setup instructions.
                             </>
                           )}
+                          {provider.id === 'outlook' && (
+                            <>
+                              To connect Outlook, you need to configure Microsoft API credentials. 
+                              Please add <code className="bg-orange-500/20 px-1 rounded">VITE_OUTLOOK_CLIENT_ID</code> to your environment variables.
+                            </>
+                          )}
                         </p>
                         <div className="mt-2">
                           <a
-                            href="https://console.cloud.google.com/"
+                            href={provider.id === 'gmail' ? 'https://console.cloud.google.com/' : 'https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade'}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center space-x-1 text-orange-300 hover:text-orange-200 text-sm"
                           >
                             <ExternalLink className="w-3 h-3" />
-                            <span>Google Cloud Console</span>
+                            <span>{provider.id === 'gmail' ? 'Google Cloud Console' : 'Azure Portal'}</span>
                           </a>
                         </div>
                       </div>
