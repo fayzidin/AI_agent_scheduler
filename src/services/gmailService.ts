@@ -422,9 +422,10 @@ class GmailService {
         // Load Gmail API
         await window.gapi.client.load('gmail', 'v1');
         
-        // Build query string
+        // Build query string - Modified to get all messages, not just unread
         let query = '';
         if (filter.isRead === false) query += 'is:unread ';
+        if (filter.isRead === true) query += 'is:read ';
         if (filter.isStarred) query += 'is:starred ';
         if (filter.isImportant) query += 'is:important ';
         if (filter.hasAttachments) query += 'has:attachment ';
@@ -432,18 +433,23 @@ class GmailService {
         if (filter.subject) query += `subject:${filter.subject} `;
         if (filter.query) query += filter.query;
 
+        // If no specific filter is set, get all inbox messages
+        if (!query.trim()) {
+          query = 'in:inbox';
+        }
+
         // Get message list
         const listResponse = await window.gapi.client.gmail.users.messages.list({
           userId: 'me',
           q: query.trim(),
-          maxResults: Math.min(maxResults, 10) // Limit to 10 for demo
+          maxResults: Math.min(maxResults, 50) // Increased limit
         });
 
         const messages = listResponse.result.messages || [];
         const detailedMessages: EmailMessage[] = [];
 
         // Get detailed info for each message
-        for (const message of messages.slice(0, 10)) {
+        for (const message of messages.slice(0, 50)) {
           try {
             const detailResponse = await window.gapi.client.gmail.users.messages.get({
               userId: 'me',
@@ -460,7 +466,7 @@ class GmailService {
           }
         }
 
-        console.log(`✅ Fetched ${detailedMessages.length} real messages from Gmail API`);
+        console.log(`✅ Fetched ${detailedMessages.length} messages from Gmail API`);
         return detailedMessages;
       } else {
         throw new Error('Gmail API not properly configured');
@@ -485,18 +491,28 @@ class GmailService {
       }
     };
 
-    // Get message body
+    // Get message body with proper encoding handling
     const getMessageBody = (payload: any): { text: string; html?: string } => {
       if (payload.body && payload.body.data) {
-        const text = atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+        const text = this.decodeBase64(payload.body.data);
         return { text };
       }
       
       if (payload.parts) {
         for (const part of payload.parts) {
           if (part.mimeType === 'text/plain' && part.body.data) {
-            const text = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+            const text = this.decodeBase64(part.body.data);
             return { text };
+          }
+        }
+        
+        // If no plain text, try HTML
+        for (const part of payload.parts) {
+          if (part.mimeType === 'text/html' && part.body.data) {
+            const html = this.decodeBase64(part.body.data);
+            // Convert HTML to plain text for display
+            const text = this.htmlToText(html);
+            return { text, html };
           }
         }
       }
@@ -520,6 +536,53 @@ class GmailService {
       providerId: 'gmail',
       roomId: 'gmail-room-1'
     };
+  }
+
+  // Helper method to properly decode base64 with URL-safe characters
+  private decodeBase64(data: string): string {
+    try {
+      // Replace URL-safe characters
+      const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
+      // Add padding if needed
+      const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+      // Decode and handle UTF-8 properly
+      const decoded = atob(padded);
+      
+      // Convert to UTF-8
+      const bytes = new Uint8Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) {
+        bytes[i] = decoded.charCodeAt(i);
+      }
+      
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch (error) {
+      console.warn('Failed to decode base64 content:', error);
+      return data; // Return original if decoding fails
+    }
+  }
+
+  // Helper method to convert HTML to plain text
+  private htmlToText(html: string): string {
+    try {
+      // Create a temporary div to parse HTML
+      const div = document.createElement('div');
+      div.innerHTML = html;
+      
+      // Remove script and style elements
+      const scripts = div.querySelectorAll('script, style');
+      scripts.forEach(el => el.remove());
+      
+      // Get text content and clean up
+      let text = div.textContent || div.innerText || '';
+      
+      // Clean up extra whitespace
+      text = text.replace(/\s+/g, ' ').trim();
+      
+      return text;
+    } catch (error) {
+      console.warn('Failed to convert HTML to text:', error);
+      return html; // Return original if conversion fails
+    }
   }
 
   async markAsRead(messageId: string): Promise<boolean> {

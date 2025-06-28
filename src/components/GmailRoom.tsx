@@ -14,7 +14,10 @@ import {
   ExternalLink,
   Shield,
   Settings,
-  Info
+  Info,
+  Filter,
+  Inbox,
+  MarkEmailRead
 } from 'lucide-react';
 import { gmailService } from '../services/gmailService';
 import { openaiService } from '../services/openaiService';
@@ -36,6 +39,7 @@ const GmailRoom: React.FC = () => {
   const [isScheduling, setIsScheduling] = useState(false);
   const [connectionError, setConnectionError] = useState<string>('');
   const [userInfo, setUserInfo] = useState<any>(null);
+  const [emailFilter, setEmailFilter] = useState<'all' | 'unread' | 'read'>('all');
 
   useEffect(() => {
     checkConnection();
@@ -46,7 +50,7 @@ const GmailRoom: React.FC = () => {
       fetchUserInfo();
       fetchEmails();
     }
-  }, [isConnected]);
+  }, [isConnected, emailFilter]);
 
   const checkConnection = () => {
     const connected = gmailService.isConnected();
@@ -62,6 +66,7 @@ const GmailRoom: React.FC = () => {
       console.log('👤 Fetching Gmail user info...');
       const info = await gmailService.getUserInfo();
       setUserInfo(info);
+      setConnectionError(''); // Clear any previous errors
       console.log('✅ Gmail user info loaded:', info);
     } catch (error) {
       console.error('❌ Failed to get user info:', error);
@@ -134,6 +139,7 @@ const GmailRoom: React.FC = () => {
       setSelectedMessage(null);
       setParsedData(null);
       setUserInfo(null);
+      setConnectionError('');
       console.log('✅ Disconnected from Gmail successfully');
     } catch (error) {
       console.error('❌ Failed to disconnect Gmail:', error);
@@ -143,25 +149,35 @@ const GmailRoom: React.FC = () => {
   const fetchEmails = async () => {
     setIsLoading(true);
     try {
-      console.log('📧 Fetching recent emails from Gmail...');
+      console.log(`📧 Fetching ${emailFilter} emails from Gmail...`);
       
-      // Fetch recent 10 emails (unread first)
-      const recentEmails = await gmailService.getMessages({ isRead: false }, 10);
+      // Build filter based on selection
+      const filter: any = {};
+      if (emailFilter === 'unread') {
+        filter.isRead = false;
+      } else if (emailFilter === 'read') {
+        filter.isRead = true;
+      }
+      // For 'all', we don't set any read filter
+      
+      const recentEmails = await gmailService.getMessages(filter, 50);
       setMessages(recentEmails);
       
-      console.log(`✅ Fetched ${recentEmails.length} emails from Gmail`);
+      console.log(`✅ Fetched ${recentEmails.length} ${emailFilter} emails from Gmail`);
       
-      // Auto-select first email with meeting intent
-      const meetingEmail = recentEmails.find(email => 
-        email.body.text.toLowerCase().includes('meeting') ||
-        email.body.text.toLowerCase().includes('schedule') ||
-        email.body.text.toLowerCase().includes('appointment')
-      );
-      
-      if (meetingEmail) {
-        console.log(`🎯 Auto-selecting email with meeting intent: "${meetingEmail.subject}"`);
-        setSelectedMessage(meetingEmail);
-        await parseEmailWithAI(meetingEmail);
+      // Auto-select first email with meeting intent if no message is selected
+      if (!selectedMessage && recentEmails.length > 0) {
+        const meetingEmail = recentEmails.find(email => 
+          email.body.text.toLowerCase().includes('meeting') ||
+          email.body.text.toLowerCase().includes('schedule') ||
+          email.body.text.toLowerCase().includes('appointment')
+        );
+        
+        if (meetingEmail) {
+          console.log(`🎯 Auto-selecting email with meeting intent: "${meetingEmail.subject}"`);
+          setSelectedMessage(meetingEmail);
+          await parseEmailWithAI(meetingEmail);
+        }
       }
     } catch (error) {
       console.error('❌ Failed to fetch Gmail messages:', error);
@@ -249,6 +265,23 @@ const GmailRoom: React.FC = () => {
       default:
         return 'text-blue-300 bg-blue-500/10 border-blue-500/20';
     }
+  };
+
+  const getMessageIcon = (message: EmailMessage) => {
+    // Check if message has potential issues
+    const hasEncodingIssues = message.body.text.includes('â') || 
+                             message.body.text.includes('Ã') ||
+                             message.body.text.includes('Â');
+    
+    if (hasEncodingIssues) {
+      return <AlertCircle className="w-4 h-4 text-orange-400" title="Encoding issues detected" />;
+    }
+    
+    if (!message.isRead) {
+      return <Mail className="w-4 h-4 text-blue-400" />;
+    }
+    
+    return <MarkEmailRead className="w-4 h-4 text-gray-400" />;
   };
 
   return (
@@ -425,11 +458,28 @@ const GmailRoom: React.FC = () => {
           <div className="p-6 border-b border-white/10 bg-white/5">
             <div className="flex items-center justify-between">
               <h3 className="text-2xl font-bold text-white flex items-center">
-                <Loader2 className={`w-6 h-6 mr-3 ${isLoading ? 'animate-spin text-blue-400' : 'text-green-400'}`} />
-                {isGmailConfigured() ? 'Your Real Gmail Messages' : 'Sample Messages'} ({messages.length})
+                <Inbox className="w-6 h-6 mr-3 text-blue-400" />
+                {isGmailConfigured() ? 'Your Gmail Inbox' : 'Sample Messages'} ({messages.length})
               </h3>
-              <div className="text-sm text-indigo-200">
-                {isLoading ? 'Loading emails...' : 'Click an email to parse with AI'}
+              
+              {/* Email Filter */}
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Filter className="w-4 h-4 text-indigo-300" />
+                  <select
+                    value={emailFilter}
+                    onChange={(e) => setEmailFilter(e.target.value as 'all' | 'unread' | 'read')}
+                    className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all" className="bg-slate-800">All Messages</option>
+                    <option value="unread" className="bg-slate-800">Unread Only</option>
+                    <option value="read" className="bg-slate-800">Read Only</option>
+                  </select>
+                </div>
+                
+                <div className="text-sm text-indigo-200">
+                  {isLoading ? 'Loading emails...' : 'Click an email to parse with AI'}
+                </div>
               </div>
             </div>
           </div>
@@ -451,9 +501,10 @@ const GmailRoom: React.FC = () => {
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <Mail className="w-12 h-12 text-indigo-400 mx-auto mb-4" />
-                    <p className="text-white text-lg">No emails found</p>
+                    <p className="text-white text-lg">No {emailFilter} emails found</p>
                     <p className="text-indigo-200">
-                      {isGmailConfigured() ? 'Try refreshing or check your Gmail account' : 'Mock data will appear here'}
+                      {emailFilter === 'all' ? 'Your inbox appears to be empty' : 
+                       emailFilter === 'unread' ? 'No unread emails' : 'No read emails'}
                     </p>
                   </div>
                 </div>
@@ -498,9 +549,7 @@ const GmailRoom: React.FC = () => {
                         </div>
                         
                         <div className="flex items-center space-x-2 ml-4">
-                          {!message.isRead && (
-                            <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                          )}
+                          {getMessageIcon(message)}
                           <Brain className="w-4 h-4 text-purple-400" />
                         </div>
                       </div>
@@ -538,6 +587,18 @@ const GmailRoom: React.FC = () => {
                       <div className="text-indigo-200 text-sm whitespace-pre-wrap max-h-40 overflow-y-auto">
                         {selectedMessage.body.text}
                       </div>
+                      
+                      {/* Encoding Warning */}
+                      {(selectedMessage.body.text.includes('â') || selectedMessage.body.text.includes('Ã')) && (
+                        <div className="mt-3 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                          <div className="flex items-center">
+                            <AlertCircle className="w-4 h-4 text-orange-400 mr-2" />
+                            <p className="text-orange-300 text-xs">
+                              Text encoding issues detected. This may affect AI parsing accuracy.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* AI Analysis Results */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, CheckCircle, Calendar, Users, Zap, Building, Mail } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -12,6 +12,7 @@ interface OnboardingStep {
 
 const OnboardingFlow: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
   const [formData, setFormData] = useState({
     company: '',
     role: '',
@@ -22,6 +23,11 @@ const OnboardingFlow: React.FC = () => {
   });
 
   const { updateProfile } = useAuth();
+
+  // Show onboarding immediately without delay
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
 
   const steps: OnboardingStep[] = [
     {
@@ -78,6 +84,10 @@ const OnboardingFlow: React.FC = () => {
   };
 
   const currentStepData = steps[currentStep];
+
+  if (!isVisible) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center p-4">
