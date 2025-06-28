@@ -42,7 +42,9 @@ const EmailDashboard: React.FC = () => {
   const [showAccountDetails, setShowAccountDetails] = useState(false);
 
   useEffect(() => {
-    loadConnectedAccounts();
+    if (user) {
+      loadConnectedAccounts();
+    }
   }, [user]);
 
   const loadConnectedAccounts = async () => {

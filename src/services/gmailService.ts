@@ -438,6 +438,8 @@ class GmailService {
           query = 'in:inbox';
         }
 
+        console.log('📧 Gmail query:', query.trim());
+
         // Get message list
         const listResponse = await window.gapi.client.gmail.users.messages.list({
           userId: 'me',
@@ -446,6 +448,8 @@ class GmailService {
         });
 
         const messages = listResponse.result.messages || [];
+        console.log(`📧 Found ${messages.length} messages matching query`);
+        
         const detailedMessages: EmailMessage[] = [];
 
         // Get detailed info for each message
@@ -462,7 +466,7 @@ class GmailService {
               detailedMessages.push(emailMessage);
             }
           } catch (error) {
-            console.error('❌ Failed to get message details:', error);
+            console.error('❌ Failed to get message details for:', message.id, error);
           }
         }
 
