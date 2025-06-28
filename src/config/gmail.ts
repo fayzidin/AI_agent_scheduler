@@ -17,15 +17,12 @@ export const getGmailConfig = (): GmailConfig => {
     clientId: clientId || '',
     apiKey: apiKey || '',
     discoveryDocs: [
-      'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest',
-      'https://www.googleapis.com/discovery/v1/apis/people/v1/rest'
+      'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest'
     ],
-    // Updated scopes for better compatibility
+    // Updated scopes for better compatibility - removed problematic scopes
     scopes: [
       'https://www.googleapis.com/auth/gmail.readonly', // Read Gmail emails
-      'https://www.googleapis.com/auth/gmail.modify', // Modify Gmail emails (mark as read, star)
-      'https://www.googleapis.com/auth/userinfo.email', // Get user email
-      'https://www.googleapis.com/auth/userinfo.profile' // Get user profile info
+      'https://www.googleapis.com/auth/userinfo.email' // Get user email only
     ]
   };
 };

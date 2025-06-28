@@ -393,47 +393,23 @@ class GmailService {
           });
           
           if (profileResponse.result && profileResponse.result.emailAddress) {
+            const email = profileResponse.result.emailAddress;
+            const name = email.split('@')[0] || 'Gmail User';
+            
             const result = {
-              email: profileResponse.result.emailAddress,
-              name: profileResponse.result.emailAddress.split('@')[0] || 'Gmail User',
-              picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(profileResponse.result.emailAddress.split('@')[0])}&background=4285f4&color=fff&size=40`
+              email: email,
+              name: name,
+              picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285f4&color=fff&size=40`
             };
             
             console.log('✅ Gmail user info retrieved from Gmail API profile');
             return result;
           }
         } catch (gmailError) {
-          console.warn('⚠️ Gmail API profile failed, trying alternative method:', gmailError);
+          console.warn('⚠️ Gmail API profile failed, using fallback method:', gmailError);
         }
         
-        // Method 2: Try Google People API (if available)
-        try {
-          await window.gapi.client.load('people', 'v1');
-          const peopleResponse = await window.gapi.client.people.people.get({
-            resourceName: 'people/me',
-            personFields: 'emailAddresses,names,photos'
-          });
-          
-          if (peopleResponse.result) {
-            const person = peopleResponse.result;
-            const email = person.emailAddresses?.[0]?.value || 'user@gmail.com';
-            const name = person.names?.[0]?.displayName || email.split('@')[0];
-            const picture = person.photos?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285f4&color=fff&size=40`;
-            
-            const result = {
-              email,
-              name,
-              picture
-            };
-            
-            console.log('✅ Gmail user info retrieved from People API');
-            return result;
-          }
-        } catch (peopleError) {
-          console.warn('⚠️ People API also failed:', peopleError);
-        }
-        
-        // Method 3: Fallback - extract from token or use default
+        // Method 2: Fallback - use a default user info
         const fallbackEmail = 'user@gmail.com';
         const fallbackName = 'Gmail User';
         
