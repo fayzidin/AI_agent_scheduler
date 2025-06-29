@@ -248,14 +248,6 @@ const Footer: React.FC = () => {
             >
               <img src="/sentry.svg" alt="Sentry" className="h-8" />
             </a>
-            <a 
-              href="https://github.com/fayzidin/AI_agent_scheduler" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="opacity-70 hover:opacity-100 transition-opacity"
-            >
-              <img src="/github.svg" alt="GitHub" className="h-8" />
-            </a>
           </div>
         </div>
       </div>
