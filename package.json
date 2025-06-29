@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@azure/msal-browser": "^4.13.2",
     "@sentry/react": "^7.120.3",
     "@sentry/tracing": "^7.120.3",
     "@supabase/supabase-js": "^2.39.0",

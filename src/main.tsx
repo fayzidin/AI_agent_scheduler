@@ -18,10 +18,7 @@ Sentry.init({
         /^https:\/\/.*\.googleapis\.com/,
       ],
     }),
-    new Sentry.Replay({
-      // Set session idle timeout to 10 minutes to prevent premature session expiration
-      sessionIdleTimeout: 600000, // 10 minutes in milliseconds
-    }),
+    new Sentry.Replay(),
   ],
   // Performance Monitoring
   tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,

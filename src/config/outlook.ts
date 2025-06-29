@@ -14,13 +14,13 @@ export const getOutlookConfig = (): OutlookConfig => {
 
   return {
     clientId: clientId || '',
-    // Use common tenant for both work and personal accounts
     authority: 'https://login.microsoftonline.com/common',
     redirectUri: window.location.origin,
     scopes: [
       'https://graph.microsoft.com/Mail.Read',
       'https://graph.microsoft.com/User.Read',
       'https://graph.microsoft.com/Calendars.Read',
+      'https://graph.microsoft.com/Calendars.ReadWrite',
       'openid',
       'profile',
       'email'
