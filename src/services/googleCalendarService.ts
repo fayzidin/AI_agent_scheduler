@@ -18,6 +18,8 @@ class GoogleCalendarService {
   private redirectUri: string;
   private authInProgress: boolean = false;
   private authTimeoutId: number | null = null;
+  private popupWindow: Window | null = null;
+  private popupCheckInterval: number | null = null;
 
   constructor() {
     // Set redirect URI for OAuth flow
@@ -79,6 +81,10 @@ class GoogleCalendarService {
             clearTimeout(this.authTimeoutId);
             this.authTimeoutId = null;
           }
+          if (this.popupCheckInterval) {
+            clearInterval(this.popupCheckInterval);
+            this.popupCheckInterval = null;
+          }
           Sentry.captureException(new Error(`Google OAuth error: ${JSON.stringify(error)}`), {
             tags: { component: 'google-oauth-error' },
             extra: { error, currentOrigin: window.location.origin },
@@ -139,6 +145,10 @@ class GoogleCalendarService {
       if (this.authTimeoutId) {
         clearTimeout(this.authTimeoutId);
         this.authTimeoutId = null;
+      }
+      if (this.popupCheckInterval) {
+        clearInterval(this.popupCheckInterval);
+        this.popupCheckInterval = null;
       }
       
       if (tokenResponse.error) {
@@ -514,6 +524,40 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
         };
         window.addEventListener('message', messageListener);
 
+        // Open a popup window manually to give more time for authentication
+        const width = 500;
+        const height = 600;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        
+        // Create a popup window first
+        this.popupWindow = window.open(
+          'about:blank',
+          'google-calendar-auth-popup',
+          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
+        );
+        
+        if (!this.popupWindow) {
+          console.error('Failed to open popup window - likely blocked by browser');
+          alert('Popup blocked! Please allow popups for this site and try again.');
+          this.authInProgress = false;
+          window.removeEventListener('message', messageListener);
+          resolve(false);
+          return;
+        }
+        
+        // Check if popup is closed prematurely
+        this.popupCheckInterval = window.setInterval(() => {
+          if (this.popupWindow && this.popupWindow.closed) {
+            console.log('Auth popup closed by user');
+            clearInterval(this.popupCheckInterval!);
+            this.popupCheckInterval = null;
+            this.authInProgress = false;
+            window.removeEventListener('message', messageListener);
+            resolve(false);
+          }
+        }, 1000);
+
         // Request access token with user interaction (popup)
         this.tokenClient.requestAccessToken({ 
           prompt: 'consent', // Show consent screen for interactive auth
@@ -523,13 +567,20 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           hint: localStorage.getItem('google_user_email') || undefined
         });
 
-        // Set a longer timeout for interactive auth (30 seconds)
+        // Set a longer timeout for interactive auth (60 seconds)
         this.authTimeoutId = window.setTimeout(() => {
-          console.log('Interactive auth timeout after 30 seconds');
+          console.log('Interactive auth timeout after 60 seconds');
           this.authInProgress = false;
+          if (this.popupCheckInterval) {
+            clearInterval(this.popupCheckInterval);
+            this.popupCheckInterval = null;
+          }
+          if (this.popupWindow && !this.popupWindow.closed) {
+            this.popupWindow.close();
+          }
           window.removeEventListener('message', messageListener);
           resolve(false);
-        }, 30000);
+        }, 60000);
       } catch (error) {
         console.error('Failed to request access token:', error);
         Sentry.captureException(error, {

@@ -18,6 +18,8 @@ class GmailService {
   private redirectUri: string;
   private authInProgress: boolean = false;
   private authTimeoutId: number | null = null;
+  private popupWindow: Window | null = null;
+  private popupCheckInterval: number | null = null;
 
   constructor() {
     // Set redirect URI for OAuth flow
@@ -88,6 +90,10 @@ class GmailService {
             clearTimeout(this.authTimeoutId);
             this.authTimeoutId = null;
           }
+          if (this.popupCheckInterval) {
+            clearInterval(this.popupCheckInterval);
+            this.popupCheckInterval = null;
+          }
           Sentry.captureException(new Error(`Gmail OAuth error: ${JSON.stringify(error)}`), {
             tags: { component: 'gmail-oauth-error' },
             extra: { error, currentOrigin: window.location.origin },
@@ -95,7 +101,8 @@ class GmailService {
         },
         // Add these options to help with COOP issues
         ux_mode: 'popup',
-        select_account: true
+        select_account: true,
+        hint: localStorage.getItem('gmail_user_email') || undefined
       });
 
       this.isInitialized = true;
@@ -191,6 +198,10 @@ class GmailService {
         clearTimeout(this.authTimeoutId);
         this.authTimeoutId = null;
       }
+      if (this.popupCheckInterval) {
+        clearInterval(this.popupCheckInterval);
+        this.popupCheckInterval = null;
+      }
 
       if (tokenResponse.error) {
         console.error('❌ Gmail token acquisition failed:', tokenResponse.error);
@@ -235,6 +246,15 @@ class GmailService {
 
       // Store token info for session persistence
       this.storeTokenInfo(tokenResponse);
+
+      // Store email for future hint
+      this.getUserInfo().then(userInfo => {
+        if (userInfo && userInfo.email) {
+          localStorage.setItem('gmail_user_email', userInfo.email);
+        }
+      }).catch(err => {
+        console.warn('Could not get user email:', err);
+      });
       
     } catch (error) {
       console.error('❌ Error in Gmail token callback:', error);
@@ -467,6 +487,40 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
         };
         window.addEventListener('message', messageListener);
 
+        // Open a popup window manually to give more time for authentication
+        const width = 500;
+        const height = 600;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        
+        // Create a popup window first
+        this.popupWindow = window.open(
+          'about:blank',
+          'gmail-auth-popup',
+          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
+        );
+        
+        if (!this.popupWindow) {
+          console.error('Failed to open popup window - likely blocked by browser');
+          alert('Popup blocked! Please allow popups for this site and try again.');
+          this.authInProgress = false;
+          window.removeEventListener('message', messageListener);
+          resolve(false);
+          return;
+        }
+        
+        // Check if popup is closed prematurely
+        this.popupCheckInterval = window.setInterval(() => {
+          if (this.popupWindow && this.popupWindow.closed) {
+            console.log('Auth popup closed by user');
+            clearInterval(this.popupCheckInterval!);
+            this.popupCheckInterval = null;
+            this.authInProgress = false;
+            window.removeEventListener('message', messageListener);
+            resolve(false);
+          }
+        }, 1000);
+
         // Request access token with user interaction (popup)
         this.tokenClient.requestAccessToken({ 
           prompt: 'consent', // Show consent screen for interactive auth
@@ -476,13 +530,20 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           hint: localStorage.getItem('gmail_user_email') || undefined
         });
 
-        // Set a longer timeout for interactive auth (30 seconds)
+        // Set a longer timeout for interactive auth (60 seconds)
         this.authTimeoutId = window.setTimeout(() => {
-          console.log('Interactive auth timeout after 30 seconds');
+          console.log('Interactive auth timeout after 60 seconds');
           this.authInProgress = false;
+          if (this.popupCheckInterval) {
+            clearInterval(this.popupCheckInterval);
+            this.popupCheckInterval = null;
+          }
+          if (this.popupWindow && !this.popupWindow.closed) {
+            this.popupWindow.close();
+          }
           window.removeEventListener('message', messageListener);
           resolve(false);
-        }, 30000);
+        }, 60000);
       } catch (error) {
         console.error('Failed to request access token:', error);
         this.authInProgress = false;
@@ -541,7 +602,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
 
     try {
       if (isGmailConfigured() && this.accessToken && window.gapi?.client) {
-        console.log('📧 Getting Gmail user info...');
+        console.log('👤 Getting Gmail user info...');
         
         // Method 1: Try to get user info from Gmail API profile (most reliable)
         try {
@@ -560,10 +621,11 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
               picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285f4&color=fff&size=40`
             };
             
+            console.log('✅ Gmail user info retrieved from Gmail API profile');
+            
             // Store email for future hint
             localStorage.setItem('gmail_user_email', email);
             
-            console.log('✅ Gmail user info retrieved from Gmail API profile');
             return result;
           }
         } catch (gmailError) {

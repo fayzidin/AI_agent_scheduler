@@ -65,6 +65,11 @@
       transform: translateY(-2px);
       box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
     }
+    .status {
+      margin-top: 20px;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.8);
+    }
   </style>
 </head>
 <body>
@@ -72,7 +77,8 @@
     <h1>Google Authentication</h1>
     <div class="spinner"></div>
     <p>Authentication in progress. This window will close automatically when complete.</p>
-    <p>If you're seeing this page for more than a few seconds, please close this window and try again.</p>
+    <p>If you're seeing this page for more than a few seconds, please complete the Google sign-in process in the popup window.</p>
+    <div id="status" class="status">Waiting for authentication...</div>
     <a href="/" class="button">Return to Application</a>
   </div>
 
@@ -80,18 +86,28 @@
     // This page helps with Google authentication by providing a clean redirect target
     // It will automatically close itself if opened as a popup
     window.onload = function() {
+      const statusElement = document.getElementById('status');
+      
+      // Update status
+      statusElement.textContent = "Authentication detected, processing...";
+      
       // Try to send a message to the opener window
       if (window.opener && !window.opener.closed) {
         try {
+          statusElement.textContent = "Sending completion message to main window...";
           window.opener.postMessage('auth-complete', '*');
+          
+          // Close this window after a short delay
+          setTimeout(function() {
+            statusElement.textContent = "Authentication complete! Closing window...";
+            window.close();
+          }, 1000);
         } catch (e) {
+          statusElement.textContent = "Error: " + e.message;
           console.error('Failed to send message to opener:', e);
         }
-        
-        // Close this window after a short delay
-        setTimeout(function() {
-          window.close();
-        }, 1000);
+      } else {
+        statusElement.textContent = "No opener window found. Please return to the application.";
       }
     };
   </script>
