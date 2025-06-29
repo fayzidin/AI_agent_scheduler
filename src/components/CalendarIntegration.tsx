@@ -311,7 +311,8 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
           
           const monthName = match[1].toLowerCase();
           const day = match[2].padStart(2, '0');
-          const year = match[3] || (new Date().getFullYear() + 1).toString(); // Use next year if no year provided
+          const nextYear = new Date().getFullYear() + 1;
+          const year = match[3] || nextYear.toString(); // Use next year if no year provided
           const month = monthNames[monthName] || '01';
           
           const extractedDate = `${year}-${month}-${day}`;

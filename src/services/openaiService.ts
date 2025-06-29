@@ -70,9 +70,10 @@ CRITICAL PARSING RULES:
    - Look for company names after names in signatures
 
 3. DATE/TIME: Parse various date formats with high precision
-   - "May 30 at 11.30 GMT+3" → "May 30, 2024 at 11:30 AM GMT+3"
+   - "May 30 at 11.30 GMT+3" → "May 30, 2025 at 11:30 AM GMT+3"
    - "Date: June 30, 2025 Time: 4:00 PM" → "June 30, 2025 at 4:00 PM"
-   - Always include year (use next year if current year month has passed)
+   - Always include year (use next year if no year specified)
+   - If a date like "June 15th" is mentioned without a year, ALWAYS use the next year (2025)
 
 4. EMAIL EXTRACTION: Find all email addresses
    - Extract from participant lists, signatures, etc.
@@ -343,6 +344,12 @@ Return only valid JSON with the extracted information.`;
       
       // "meet next week on Tuesday at 10:00 AM"
       /(?:meet|meeting|call)\s+next\s+week\s+on\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
+      
+      // "June 15th at 4:00 PM" (without year)
+      /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
+      
+      // "Are you available on June 15th at 4:00 PM" (without year)
+      /available\s+on\s+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
     ];
 
     for (const pattern of dateTimePatterns) {
@@ -359,15 +366,6 @@ Return only valid JSON with the extracted information.`;
           const minute = match[5];
           const ampm = match[6] || '';
           return `${month} ${day}, ${year} at ${hour}:${minute} ${ampm}`.trim();
-        } else if (pattern.source.includes('at')) {
-          // "May 30 at 11.30 GMT+3" pattern
-          const month = match[1];
-          const day = match[2];
-          const hour = match[3];
-          const minute = match[4];
-          const timezone = match[5] || '';
-          const currentYear = new Date().getFullYear();
-          return `${month} ${day}, ${currentYear + 1} at ${hour}:${minute} ${timezone}`.trim();
         } else if (pattern.source.includes('tomorrow')) {
           // "schedule a meeting for tomorrow at 3:00 PM" pattern
           const tomorrow = new Date();
@@ -390,17 +388,66 @@ Return only valid JSON with the extracted information.`;
           const minute = match[3];
           const ampm = match[4] || '';
           return `${month} ${day}, ${year} at ${hour}:${minute} ${ampm}`.trim();
-        } else {
-          // Other patterns
+        } else if (pattern.source.includes('available\\s+on') && !pattern.source.includes('\\d{4}')) {
+          // "Are you available on June 15th at 4:00 PM" pattern (without year)
           const month = match[1];
           const day = match[2];
-          const year = match[3];
+          const hour = match[3];
+          const minute = match[4];
+          const ampm = match[5] || '';
+          const nextYear = new Date().getFullYear() + 1;
+          return `${month} ${day}, ${nextYear} at ${hour}:${minute} ${ampm}`.trim();
+        } else if (!pattern.source.includes('\\d{4}') && pattern.source.includes('at\\s+\\(')) {
+          // "June 15th at 4:00 PM" pattern (without year)
+          const month = match[1];
+          const day = match[2];
+          const hour = match[3];
+          const minute = match[4];
+          const ampm = match[5] || '';
+          const nextYear = new Date().getFullYear() + 1;
+          return `${month} ${day}, ${nextYear} at ${hour}:${minute} ${ampm}`.trim();
+        } else if (pattern.source.includes('at') && !pattern.source.includes('\\d{4}')) {
+          // "May 30 at 11.30 GMT+3" pattern without year
+          const month = match[1];
+          const day = match[2];
+          const hour = match[3];
+          const minute = match[4];
+          const timezone = match[5] || '';
+          const nextYear = new Date().getFullYear() + 1;
+          return `${month} ${day}, ${nextYear} at ${hour}:${minute} ${timezone}`.trim();
+        } else if (pattern.source.includes('at')) {
+          // "May 30 at 11.30 GMT+3" pattern with year
+          const month = match[1];
+          const day = match[2];
+          const hour = match[3];
+          const minute = match[4];
+          const timezone = match[5] || '';
+          const currentYear = new Date().getFullYear();
+          return `${month} ${day}, ${currentYear + 1} at ${hour}:${minute} ${timezone}`.trim();
+        } else {
+          // Other patterns with year
+          const month = match[1];
+          const day = match[2];
+          const year = match[3] || (new Date().getFullYear() + 1).toString();
           const hour = match[4];
           const minute = match[5];
           const ampm = match[6] || '';
           return `${month} ${day}, ${year} at ${hour}:${minute} ${ampm}`.trim();
         }
       }
+    }
+
+    // Special case for "June 15th at 4:00 PM" without explicit pattern match
+    const simpleDateTimePattern = /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i;
+    const simpleDateTimeMatch = text.match(simpleDateTimePattern);
+    if (simpleDateTimeMatch) {
+      const month = simpleDateTimeMatch[1];
+      const day = simpleDateTimeMatch[2];
+      const hour = simpleDateTimeMatch[3];
+      const minute = simpleDateTimeMatch[4];
+      const ampm = simpleDateTimeMatch[5] || '';
+      const nextYear = new Date().getFullYear() + 1;
+      return `${month} ${day}, ${nextYear} at ${hour}:${minute} ${ampm}`.trim();
     }
 
     // Handle relative dates
@@ -475,7 +522,7 @@ Return only valid JSON with the extracted information.`;
       /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*\n?\s*([A-Z][a-zA-Z]+)(?:\s*\n|\s*$)/,
       
       // Well-known company patterns
-      /\b(Andersen|HighTechIno|Microsoft|Google|Apple|Amazon|Meta|Tesla|Netflix|Spotify|Salesforce|Oracle|IBM|Intel|Adobe|Zoom|Slack|Dropbox)\b/i,
+      /\b(Andersen|HighTechIno|Microsoft|Google|Apple|Amazon|Meta|Tesla|Netflix|Spotify|Salesforce|Oracle|IBM|Intel|Adobe|Zoom|Slack|Dropbox|TechCorp)\b/i,
       
       // Company with legal suffixes
       /\b([A-Z][a-zA-Z\s&]+?(?:\s+(?:Inc\.|LLC|Corp\.|Corporation|Company|Ltd\.|Limited|Co\.)))\b/g,
@@ -485,6 +532,9 @@ Return only valid JSON with the extracted information.`;
       
       // "at [Company]"
       /\bat\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[,.]|\s+and|\s+to|\s*$)/i,
+      
+      // "vacancy at [Company]"
+      /vacancy\s+at\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[,.]|\s+and|\s+to|\s*$)/i,
     ];
 
     for (const pattern of companyPatterns) {
@@ -523,7 +573,8 @@ Return only valid JSON with the extracted information.`;
       'would like to have a meeting', 'would like to have a chat',
       'would like to have a discussion', 'would like to have a conversation',
       'would like to speak', 'would like to talk', 'would like to discuss',
-      'would like to connect', 'would like to meet', 'would like to have a call'
+      'would like to connect', 'would like to meet', 'would like to have a call',
+      'discuss vacancy', 'discuss position', 'discuss opportunity'
     ];
     
     if (schedulePatterns.some(pattern => lowerText.includes(pattern))) {

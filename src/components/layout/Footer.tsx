@@ -220,6 +220,36 @@ const Footer: React.FC = () => {
             </p>
           </div>
         </div>
+
+        {/* Partner Logos */}
+        <div className="border-t border-white/10 mt-6 pt-6">
+          <div className="flex flex-wrap justify-center items-center gap-8">
+            <a 
+              href="https://supabase.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="opacity-70 hover:opacity-100 transition-opacity"
+            >
+              <img src="/supabase.svg" alt="Supabase" className="h-8" />
+            </a>
+            <a 
+              href="https://www.netlify.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="opacity-70 hover:opacity-100 transition-opacity"
+            >
+              <img src="/netlify.svg" alt="Netlify" className="h-8" />
+            </a>
+            <a 
+              href="https://sentry.io/welcome/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="opacity-70 hover:opacity-100 transition-opacity"
+            >
+              <img src="/sentry.svg" alt="Sentry" className="h-8" />
+            </a>
+          </div>
+        </div>
       </div>
     </footer>
   );
