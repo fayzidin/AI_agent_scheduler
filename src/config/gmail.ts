@@ -19,12 +19,12 @@ export const getGmailConfig = (): GmailConfig => {
     discoveryDocs: [
       'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest'
     ],
-    // Updated scopes for better compatibility - removed problematic scopes
+    // Updated scopes for better compatibility
     scopes: [
-      'https://www.googleapis.com/auth/gmail.readonly', // Read Gmail emails
-      'https://www.googleapis.com/auth/userinfo.email', // Get user email only
-      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/calendar.readonly',
       'https://www.googleapis.com/auth/calendar.events',
       'openid'
     ]

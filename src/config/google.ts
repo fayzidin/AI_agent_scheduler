@@ -17,13 +17,12 @@ export const getGoogleConfig = (): GoogleConfig => {
     clientId: clientId || '',
     apiKey: apiKey || '',
     discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-    // Read-only calendar scopes to avoid verification
+    // Updated scopes for better compatibility
     scopes: [
       'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/calendar.events',
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/userinfo.email',
-      'https://www.googleapis.com/auth/calendar.events',
       'openid'
     ]
   };

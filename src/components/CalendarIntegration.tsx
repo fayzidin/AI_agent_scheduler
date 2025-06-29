@@ -34,10 +34,18 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [connectionError, setConnectionError] = useState<string>('');
   const [showExportOptions, setShowExportOptions] = useState(false);
+  const [authAttempts, setAuthAttempts] = useState(0);
 
   useEffect(() => {
     setProviders(calendarService.getProviders());
   }, []);
+
+  useEffect(() => {
+    if (isConnecting === null) {
+      // Update providers when not in connecting state
+      setProviders(calendarService.getProviders());
+    }
+  }, [isConnecting]);
 
   useEffect(() => {
     // Extract and set the target date from parsed data
@@ -62,6 +70,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
 
     setIsConnecting(providerId);
     setConnectionError('');
+    setAuthAttempts(prev => prev + 1);
     
     try {
       console.log(`🔗 Connecting to ${providerId} calendar...`);
@@ -94,6 +103,14 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
         errorMessage = 'OAuth configuration error. Please check the setup guide for instructions on configuring Google Cloud Console.';
       } else if (error.message?.includes('not configured')) {
         errorMessage = 'Google Calendar API not configured. Please add your Google API credentials to environment variables.';
+      } else if (error.message?.includes('popup_blocked')) {
+        errorMessage = 'Popup blocked. Please allow popups for this site and try again.';
+      } else if (error.message?.includes('popup_closed')) {
+        errorMessage = 'Authentication canceled. The sign-in popup was closed.';
+      } else if (error.message?.includes('interaction_required')) {
+        errorMessage = 'Interactive authentication required. Please try again.';
+      } else if (error.message?.includes('COOP')) {
+        errorMessage = 'Browser security policy blocked the authentication. Please try using a different browser or disable strict COOP settings.';
       }
       
       setConnectionError(errorMessage);
@@ -571,6 +588,35 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                   <p className="text-red-200 text-sm">{connectionError}</p>
                 </div>
               </div>
+              
+              {/* Retry button for authentication errors */}
+              {(connectionError.includes('authentication') || 
+                connectionError.includes('popup') || 
+                connectionError.includes('OAuth') ||
+                connectionError.includes('COOP')) && (
+                <div className="mt-3 flex justify-end">
+                  <button
+                    onClick={() => {
+                      const googleProvider = providers.find(p => p.id === 'google');
+                      if (googleProvider) {
+                        handleConnectProvider('google');
+                      }
+                    }}
+                    className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-lg text-sm hover:bg-blue-500/30 transition-all duration-200"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              )}
+              
+              {/* Browser compatibility suggestion */}
+              {connectionError.includes('COOP') && (
+                <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <p className="text-blue-200 text-sm">
+                    Try using a different browser like Chrome or Edge, which may have better compatibility with Google's authentication.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

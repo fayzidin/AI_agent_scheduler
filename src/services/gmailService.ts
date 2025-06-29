@@ -65,7 +65,7 @@ class GmailService {
         });
       });
 
-      // Initialize Google Identity Services token client
+      // Initialize Google Identity Services token client with improved configuration
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
         scope: config.scopes.join(' '),
@@ -79,7 +79,10 @@ class GmailService {
             tags: { component: 'gmail-oauth-error' },
             extra: { error, currentOrigin: window.location.origin },
           });
-        }
+        },
+        // Add these options to help with COOP issues
+        ux_mode: 'popup',
+        select_account: true
       });
 
       this.isInitialized = true;
@@ -130,6 +133,8 @@ class GmailService {
 
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
+      script.async = true;
+      script.defer = true;
       script.onload = () => {
         clearTimeout(timeout);
         resolve();
@@ -176,6 +181,10 @@ class GmailService {
           errorMessage = 'Access denied. Please grant permission to access your Gmail account.';
         } else if (tokenResponse.error === 'redirect_uri_mismatch') {
           errorMessage = `OAuth configuration error: The current domain (${window.location.origin}) is not authorized in Google Cloud Console. Please add this domain to your OAuth client's authorized JavaScript origins.`;
+        } else if (tokenResponse.error === 'popup_closed_by_user') {
+          errorMessage = 'Authentication canceled: The sign-in popup was closed.';
+        } else if (tokenResponse.error === 'popup_blocked_by_browser') {
+          errorMessage = 'Popup blocked: Please allow popups for this site and try again.';
         }
         
         Sentry.captureException(new Error(errorMessage), {
@@ -281,25 +290,33 @@ class GmailService {
       return true;
     }
 
-    // If no stored token, request new one
-    console.log('👤 Requesting new Gmail access token...');
-    return this.requestAccessToken();
+    // Try silent authentication first
+    console.log('🤫 Attempting silent authentication...');
+    const silentSuccess = await this.attemptSilentAuth();
+    if (silentSuccess) {
+      return true;
+    }
+
+    // If silent auth fails, fall back to interactive auth
+    console.log('👤 Attempting interactive authentication...');
+    return this.attemptInteractiveAuth();
   }
 
-  private async requestAccessToken(): Promise<boolean> {
-    return new Promise((resolve, reject) => {
+  private async attemptSilentAuth(): Promise<boolean> {
+    return new Promise((resolve) => {
       try {
         if (!this.tokenClient) {
-          console.error('❌ Token client not available');
-          reject(new Error('Gmail token client not initialized'));
+          console.log('Token client not initialized for silent auth');
+          resolve(false);
           return;
         }
 
-        console.log('🔑 Requesting Gmail access token...');
+        console.log('Attempting silent Gmail authentication...');
 
-        // Set up one-time callback for this request
+        // Store the original callback
         const originalCallback = this.tokenClient.callback;
         
+        // Set up one-time callback for this request
         this.tokenClient.callback = (tokenResponse: any) => {
           try {
             // Call the original handler
@@ -307,28 +324,111 @@ class GmailService {
             
             // Resolve based on success/failure
             if (tokenResponse.error) {
-              console.error('❌ Gmail auth failed:', tokenResponse.error);
-              reject(new Error(tokenResponse.error));
+              console.log('Silent auth failed:', tokenResponse.error);
+              resolve(false);
             } else {
-              console.log('✅ Gmail authentication successful!');
+              console.log('Silent auth successful!');
               resolve(true);
             }
             
             // Restore original callback
             this.tokenClient.callback = originalCallback;
           } catch (error) {
-            console.error('❌ Error in Gmail auth callback:', error);
+            console.error('Error in silent auth callback:', error);
             this.tokenClient.callback = originalCallback;
-            reject(error);
+            resolve(false);
           }
         };
 
-        // Request access token
-        this.tokenClient.requestAccessToken();
+        // Request access token silently (no user interaction)
+        this.tokenClient.requestAccessToken({ 
+          prompt: 'none' // This is the key - no user prompt
+        });
+
+        // Set a timeout for silent auth
+        setTimeout(() => {
+          if (this.tokenClient.callback !== originalCallback) {
+            console.log('Silent auth timeout');
+            this.tokenClient.callback = originalCallback;
+            resolve(false);
+          }
+        }, 5000);
 
       } catch (error) {
-        console.error('❌ Failed to request Gmail access token:', error);
-        reject(error);
+        console.error('Silent auth attempt failed:', error);
+        resolve(false);
+      }
+    });
+  }
+
+  private async attemptInteractiveAuth(): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        if (!this.tokenClient) {
+          console.error('Token client not initialized for interactive auth');
+          resolve(false);
+          return;
+        }
+
+        console.log('Attempting interactive Gmail authentication...');
+
+        // Store the original callback
+        const originalCallback = this.tokenClient.callback;
+        
+        // Override callback to handle the promise resolution
+        this.tokenClient.callback = (tokenResponse: any) => {
+          try {
+            // Call the original handler
+            this.handleTokenResponse(tokenResponse);
+            
+            // Resolve the promise based on success/failure
+            if (tokenResponse.error) {
+              console.error('Interactive auth failed:', tokenResponse.error);
+              
+              // Provide helpful error messages
+              if (tokenResponse.error === 'redirect_uri_mismatch') {
+                console.error(`
+🚨 OAuth Configuration Error:
+
+The current domain (${window.location.origin}) is not authorized in your Google Cloud Console.
+
+To fix this:
+1. Go to https://console.cloud.google.com/
+2. Navigate to APIs & Services → Credentials
+3. Edit your OAuth 2.0 Client ID
+4. Add this URL to "Authorized JavaScript origins":
+   ${window.location.origin}
+5. Save and wait 5-10 minutes for changes to propagate
+
+See GOOGLE_OAUTH_SETUP.md for detailed instructions.
+                `);
+              }
+              
+              resolve(false);
+            } else {
+              console.log('Interactive auth successful!');
+              resolve(true);
+            }
+            
+            // Restore original callback
+            this.tokenClient.callback = originalCallback;
+          } catch (error) {
+            console.error('Error in interactive auth callback:', error);
+            this.tokenClient.callback = originalCallback;
+            resolve(false);
+          }
+        };
+
+        // Request access token with user interaction (popup)
+        this.tokenClient.requestAccessToken({ 
+          prompt: 'consent', // Show consent screen for interactive auth
+          // Add these options to help with COOP issues
+          ux_mode: 'popup',
+          select_account: true
+        });
+      } catch (error) {
+        console.error('Failed to request access token:', error);
+        resolve(false);
       }
     });
   }

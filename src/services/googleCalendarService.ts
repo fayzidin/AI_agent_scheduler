@@ -57,21 +57,23 @@ class GoogleCalendarService {
 
       this.gapi = window.gapi;
 
-      // Initialize Google Identity Services token client with silent flow support
+      // Initialize Google Identity Services token client with improved configuration
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
         scope: config.scopes.join(' '),
         callback: (tokenResponse: any) => {
           this.handleTokenResponse(tokenResponse);
         },
-        // Add error handling for redirect URI issues
         error_callback: (error: any) => {
           console.error('Google OAuth error:', error);
           Sentry.captureException(new Error(`Google OAuth error: ${JSON.stringify(error)}`), {
             tags: { component: 'google-oauth-error' },
             extra: { error, currentOrigin: window.location.origin },
           });
-        }
+        },
+        // Add these options to help with COOP issues
+        ux_mode: 'popup',
+        select_account: true
       });
 
       this.isInitialized = true;
@@ -121,6 +123,10 @@ class GoogleCalendarService {
         let errorMessage = `Token acquisition failed: ${tokenResponse.error}`;
         if (tokenResponse.error === 'redirect_uri_mismatch') {
           errorMessage = `OAuth configuration error: The current domain (${window.location.origin}) is not authorized in Google Cloud Console. Please add this domain to your OAuth client's authorized JavaScript origins.`;
+        } else if (tokenResponse.error === 'popup_closed_by_user') {
+          errorMessage = 'Authentication canceled: The sign-in popup was closed.';
+        } else if (tokenResponse.error === 'popup_blocked_by_browser') {
+          errorMessage = 'Popup blocked: Please allow popups for this site and try again.';
         }
         
         Sentry.captureException(new Error(errorMessage), {
@@ -161,7 +167,7 @@ class GoogleCalendarService {
   }
 
   private storeTokenInfo(tokenResponse: any) {
-    // Store token info in sessionStorage for persistence during the session
+    // Store token info in localStorage for better persistence
     const tokenInfo = {
       access_token: tokenResponse.access_token,
       expires_at: Date.now() + (tokenResponse.expires_in * 1000),
@@ -169,7 +175,7 @@ class GoogleCalendarService {
     };
     
     try {
-      sessionStorage.setItem('google_calendar_token', JSON.stringify(tokenInfo));
+      localStorage.setItem('google_calendar_token', JSON.stringify(tokenInfo));
     } catch (error) {
       console.warn('Failed to store token info:', error);
     }
@@ -177,7 +183,7 @@ class GoogleCalendarService {
 
   private loadStoredToken(): boolean {
     try {
-      const storedToken = sessionStorage.getItem('google_calendar_token');
+      const storedToken = localStorage.getItem('google_calendar_token');
       if (!storedToken) return false;
 
       const tokenInfo = JSON.parse(storedToken);
@@ -192,12 +198,12 @@ class GoogleCalendarService {
         return true;
       } else {
         // Token expired, remove it
-        sessionStorage.removeItem('google_calendar_token');
+        localStorage.removeItem('google_calendar_token');
         return false;
       }
     } catch (error) {
       console.warn('Failed to load stored token:', error);
-      sessionStorage.removeItem('google_calendar_token');
+      localStorage.removeItem('google_calendar_token');
       return false;
     }
   }
@@ -240,6 +246,8 @@ class GoogleCalendarService {
 
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
       script.onload = () => {
         clearTimeout(timeout);
         resolve();
@@ -431,7 +439,10 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
 
         // Request access token with user interaction (popup)
         this.tokenClient.requestAccessToken({ 
-          prompt: 'consent' // Show consent screen for interactive auth
+          prompt: 'consent', // Show consent screen for interactive auth
+          // Add these options to help with COOP issues
+          ux_mode: 'popup',
+          select_account: true
         });
       } catch (error) {
         console.error('Failed to request access token:', error);
@@ -464,7 +475,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
       }
       
       // Clear stored session
-      sessionStorage.removeItem('google_calendar_token');
+      localStorage.removeItem('google_calendar_token');
       
       this.isSignedIn = false;
       console.log('Google Calendar signed out successfully');
