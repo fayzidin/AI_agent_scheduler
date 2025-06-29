@@ -31,13 +31,19 @@ class OutlookService {
         level: 'info',
       });
 
-      // Load MSAL library
-      await this.loadMSAL();
+      // Load MSAL library with improved error handling and retries
+      await this.loadMSALWithRetry();
       
       const config = getOutlookConfig();
       
       if (!config.clientId) {
         throw new Error('Missing VITE_OUTLOOK_CLIENT_ID in environment variables');
+      }
+
+      // Check if MSAL is available
+      if (!window.msal) {
+        console.error('MSAL library not available after loading attempt');
+        throw new Error('Microsoft Authentication Library (MSAL) not available');
       }
 
       // Initialize MSAL instance
@@ -90,8 +96,45 @@ class OutlookService {
     }
   }
 
+  private async loadMSALWithRetry(maxRetries = 3): Promise<void> {
+    let retries = 0;
+    
+    while (retries < maxRetries) {
+      try {
+        // Check if MSAL is already loaded
+        if (window.msal) {
+          console.log('MSAL already loaded');
+          return;
+        }
+        
+        console.log(`Attempting to load MSAL (attempt ${retries + 1}/${maxRetries})...`);
+        await this.loadMSAL();
+        
+        // Verify MSAL loaded successfully
+        if (window.msal) {
+          console.log('MSAL loaded successfully');
+          return;
+        } else {
+          throw new Error('MSAL not available after script loaded');
+        }
+      } catch (error) {
+        retries++;
+        console.warn(`MSAL load attempt ${retries} failed:`, error);
+        
+        if (retries >= maxRetries) {
+          console.error('All MSAL load attempts failed');
+          throw new Error('Failed to load Microsoft Authentication Library after multiple attempts');
+        }
+        
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+      }
+    }
+  }
+
   private async loadMSAL(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Check if MSAL is already loaded
       if (window.msal) {
         resolve();
         return;
@@ -103,14 +146,36 @@ class OutlookService {
 
       const script = document.createElement('script');
       script.src = 'https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
+      script.crossOrigin = 'anonymous'; // Add CORS support
+      
       script.onload = () => {
         clearTimeout(timeout);
-        resolve();
+        // Verify MSAL is actually available
+        if (window.msal) {
+          resolve();
+        } else {
+          // Sometimes the script loads but the global isn't immediately available
+          let checkCount = 0;
+          const checkInterval = setInterval(() => {
+            if (window.msal) {
+              clearInterval(checkInterval);
+              clearTimeout(timeout);
+              resolve();
+            } else if (checkCount > 10) {
+              clearInterval(checkInterval);
+              reject(new Error('MSAL loaded but global object not available'));
+            }
+            checkCount++;
+          }, 100);
+        }
       };
-      script.onerror = () => {
+      
+      script.onerror = (e) => {
         clearTimeout(timeout);
+        console.error('MSAL script failed to load:', e);
         reject(new Error('Failed to load MSAL'));
       };
+      
       document.head.appendChild(script);
     });
   }
@@ -192,16 +257,19 @@ class OutlookService {
   private async attemptSilentAuth(): Promise<boolean> {
     try {
       const config = getOutlookConfig();
-      const silentRequest = {
-        scopes: config.scopes,
-        account: this.msalInstance.getAllAccounts()[0]
-      };
-
-      if (!silentRequest.account) {
-        console.log('No account found for silent auth');
+      const accounts = this.msalInstance.getAllAccounts();
+      
+      if (accounts.length === 0) {
+        console.log('No accounts found for silent auth');
         return false;
       }
+      
+      const silentRequest = {
+        scopes: config.scopes,
+        account: accounts[0]
+      };
 
+      console.log('Attempting silent Outlook authentication...');
       const response = await this.msalInstance.acquireTokenSilent(silentRequest);
       
       this.accessToken = response.accessToken;

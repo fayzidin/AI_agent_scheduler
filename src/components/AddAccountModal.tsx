@@ -149,6 +149,11 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
         errorMessage = 'OAuth configuration error. Please check the setup guide for instructions on configuring your cloud console.';
       } else if (error.message?.includes('not configured')) {
         errorMessage = `${provider.name} API not configured. Please add your API credentials to environment variables.`;
+      } else if (error.message?.includes('Failed to load MSAL') || error.message?.includes('Microsoft Authentication Library')) {
+        errorMessage = `Failed to load Microsoft Authentication Library (MSAL). This could be due to:
+        • Network connectivity issues
+        • Content security policy restrictions
+        • Try refreshing the page or check your internet connection`;
       }
       
       setConnectionError(errorMessage);
@@ -243,7 +248,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                 <h3 className="text-blue-300 font-semibold text-sm">Secure Read-Only Access</h3>
                 <p className="text-blue-200 text-sm mt-1">
                   We use OAuth 2.0 with read-only permissions to securely connect your accounts. 
-                  We can only read your emails - we cannot send, delete, or modify anything.
+                  We can only read your emails and extract meeting information, we cannot send, delete, or modify anything.
                 </p>
               </div>
             </div>
@@ -412,7 +417,8 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                           {provider.id === 'outlook' && (
                             <>
                               To connect Outlook, you need to configure Microsoft API credentials. 
-                              Please add <code className="bg-orange-500/20 px-1 rounded">VITE_OUTLOOK_CLIENT_ID</code> to your environment variables.
+                              Please check the <code className="bg-orange-500/20 px-1 rounded">OUTLOOK_OAUTH_SETUP.md</code> file
+                              for detailed setup instructions.
                             </>
                           )}
                         </p>
@@ -459,6 +465,20 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                 <div>
                   <h4 className="text-red-300 font-semibold text-sm">Connection Error</h4>
                   <p className="text-red-200 text-sm mt-1 whitespace-pre-line">{connectionError}</p>
+                  
+                  {/* MSAL specific troubleshooting */}
+                  {connectionError.includes('Microsoft Authentication Library') && (
+                    <div className="mt-3 p-3 bg-red-500/20 rounded-lg">
+                      <p className="text-red-200 text-sm font-semibold">Troubleshooting steps:</p>
+                      <ol className="list-decimal list-inside text-red-200 text-sm mt-2 space-y-1">
+                        <li>Try refreshing the page</li>
+                        <li>Check your internet connection</li>
+                        <li>Disable any content blockers or ad blockers</li>
+                        <li>Try using a different browser</li>
+                        <li>Clear your browser cache and cookies</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
