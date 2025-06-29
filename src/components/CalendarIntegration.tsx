@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap, Link, Shield, Download } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, AlertCircle, Loader2, Send, ExternalLink, Settings, Zap, Link, Shield, Download, Info } from 'lucide-react';
 import { calendarService } from '../services/calendarService';
 import { CalendarProvider, AvailabilityResponse, CalendarEvent } from '../types/calendar';
 import { isGoogleConfigured } from '../config/google';
