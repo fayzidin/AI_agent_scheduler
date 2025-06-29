@@ -81,6 +81,12 @@ CRITICAL PARSING RULES:
    - "arrange a call" → "schedule_meeting"
    - "invite you to a meeting" → "schedule_meeting"
    - "discuss our project" → "schedule_meeting"
+   - "would like to meet" → "schedule_meeting"
+   - "let's have a call" → "schedule_meeting"
+   - "can we meet" → "schedule_meeting"
+   - "schedule a meeting" → "schedule_meeting"
+   - "set up a call" → "schedule_meeting"
+   - "let's connect" → "schedule_meeting"
 
 Return your response as valid JSON with this exact structure:
 {
@@ -328,6 +334,15 @@ Return only valid JSON with the extracted information.`;
       
       // "June 30, 2025 Time: 4:00 PM"
       /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4}).*?(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
+      
+      // "would you be available on January 15th, 2024 at 2:00 PM"
+      /available\s+on\s+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4}).*?(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
+      
+      // "schedule a meeting for tomorrow at 3:00 PM"
+      /(?:schedule|meeting|call)\s+(?:for|on)\s+tomorrow\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
+      
+      // "meet next week on Tuesday at 10:00 AM"
+      /(?:meet|meeting|call)\s+next\s+week\s+on\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi,
     ];
 
     for (const pattern of dateTimePatterns) {
@@ -353,6 +368,28 @@ Return only valid JSON with the extracted information.`;
           const timezone = match[5] || '';
           const currentYear = new Date().getFullYear();
           return `${month} ${day}, ${currentYear + 1} at ${hour}:${minute} ${timezone}`.trim();
+        } else if (pattern.source.includes('tomorrow')) {
+          // "schedule a meeting for tomorrow at 3:00 PM" pattern
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const month = tomorrow.toLocaleString('en-US', { month: 'long' });
+          const day = tomorrow.getDate();
+          const year = tomorrow.getFullYear();
+          const hour = match[1];
+          const minute = match[2];
+          const ampm = match[3] || '';
+          return `${month} ${day}, ${year} at ${hour}:${minute} ${ampm}`.trim();
+        } else if (pattern.source.includes('next\\s+week')) {
+          // "meet next week on Tuesday at 10:00 AM" pattern
+          const today = new Date();
+          const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+          const month = nextWeek.toLocaleString('en-US', { month: 'long' });
+          const day = nextWeek.getDate();
+          const year = nextWeek.getFullYear();
+          const hour = match[2];
+          const minute = match[3];
+          const ampm = match[4] || '';
+          return `${month} ${day}, ${year} at ${hour}:${minute} ${ampm}`.trim();
         } else {
           // Other patterns
           const month = match[1];
@@ -375,8 +412,16 @@ Return only valid JSON with the extracted information.`;
         month: 'long', 
         day: 'numeric' 
       });
+    } else if (text.toLowerCase().includes('next week')) {
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      return nextWeek.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
     }
-
+    
     return 'Not specified';
   }
 
@@ -394,6 +439,15 @@ Return only valid JSON with the extracted information.`;
       
       // Name at end of email
       /\n\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*$/i,
+      
+      // "Hi, I'm [Name]"
+      /Hi,?\s+I'm\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      
+      // "My name is [Name]"
+      /My\s+name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      
+      // "From: [Name]"
+      /From:\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
     ];
 
     for (const pattern of namePatterns) {
@@ -425,6 +479,12 @@ Return only valid JSON with the extracted information.`;
       
       // Company with legal suffixes
       /\b([A-Z][a-zA-Z\s&]+?(?:\s+(?:Inc\.|LLC|Corp\.|Corporation|Company|Ltd\.|Limited|Co\.)))\b/g,
+      
+      // "from [Company]"
+      /from\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[,.]|\s+and|\s+to|\s*$)/i,
+      
+      // "at [Company]"
+      /\bat\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[,.]|\s+and|\s+to|\s*$)/i,
     ];
 
     for (const pattern of companyPatterns) {
@@ -450,17 +510,32 @@ Return only valid JSON with the extracted information.`;
   private detectIntent(text: string): string {
     const lowerText = text.toLowerCase();
     
+    // Enhanced meeting detection patterns
+    const schedulePatterns = [
+      'schedule', 'meeting', 'appointment', 'call', 'arrange', 
+      'invite you to', 'discuss our project', 'meeting details',
+      'would like to meet', 'let\'s have a call', 'can we meet',
+      'set up a call', 'let\'s connect', 'available on', 'available for',
+      'would you be available', 'would love to chat', 'let\'s chat',
+      'would like to discuss', 'would like to talk', 'let\'s talk',
+      'would like to schedule', 'would like to arrange', 'would like to set up',
+      'would like to connect', 'would like to meet', 'would like to have a call',
+      'would like to have a meeting', 'would like to have a chat',
+      'would like to have a discussion', 'would like to have a conversation',
+      'would like to speak', 'would like to talk', 'would like to discuss',
+      'would like to connect', 'would like to meet', 'would like to have a call'
+    ];
+    
+    if (schedulePatterns.some(pattern => lowerText.includes(pattern))) {
+      return 'schedule_meeting';
+    }
+    
     if (lowerText.includes('reschedule') || lowerText.includes('move the meeting') || 
         lowerText.includes('change the time') || lowerText.includes('postpone')) {
       return 'reschedule_meeting';
     } else if (lowerText.includes('cancel') || lowerText.includes('call off') || 
                lowerText.includes('cancel the meeting')) {
       return 'cancel_meeting';
-    } else if (lowerText.includes('meeting') || lowerText.includes('schedule') || 
-               lowerText.includes('appointment') || lowerText.includes('call') ||
-               lowerText.includes('arrange') || lowerText.includes('invite you to') ||
-               lowerText.includes('discuss our project') || lowerText.includes('meeting details')) {
-      return 'schedule_meeting';
     }
     
     return 'general';
