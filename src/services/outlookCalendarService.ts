@@ -130,7 +130,7 @@ class OutlookCalendarService {
       }, 10000);
 
       const script = document.createElement('script');
-      script.src = 'https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
+      script.src = 'https://alcdn.msauth.net/browser/2.38.1/js/msal-browser.min.js';
       script.crossOrigin = 'anonymous'; // Add CORS support
       
       script.onload = () => {
