@@ -1,0 +1,14 @@
+# Netlify headers file
+# https://docs.netlify.com/routing/headers/
+
+# Disable COOP for the Google auth redirect page to allow popups to work properly
+/google-auth-fix.html
+  Cross-Origin-Opener-Policy: unsafe-none
+  Cross-Origin-Embedder-Policy: unsafe-none
+
+# Default security headers for all other pages
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
