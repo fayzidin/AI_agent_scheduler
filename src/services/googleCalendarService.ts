@@ -82,10 +82,16 @@ class GoogleCalendarService {
             clearTimeout(this.authTimeoutId);
             this.authTimeoutId = null;
           }
-          Sentry.captureException(new Error(`Google OAuth error: ${JSON.stringify(error)}`), {
-            tags: { component: 'google-oauth-error' },
-            extra: { error, currentOrigin: window.location.origin },
-          });
+          // Don't send these errors to Sentry as they're expected during auth flow
+          if (!error.message?.includes('popup_closed') && 
+              !error.message?.includes('interaction_required') &&
+              !error.message?.includes('window.closed') &&
+              !error.message?.includes('Cross-Origin-Opener-Policy')) {
+            Sentry.captureException(new Error(`Google OAuth error: ${JSON.stringify(error)}`), {
+              tags: { component: 'google-oauth-error' },
+              extra: { error, currentOrigin: window.location.origin },
+            });
+          }
         }
       });
 
@@ -153,14 +159,20 @@ class GoogleCalendarService {
           errorMessage = 'Popup blocked: Please allow popups for this site and try again.';
         }
         
-        Sentry.captureException(new Error(errorMessage), {
-          tags: { component: 'google-calendar-auth' },
-          extra: { 
-            error: tokenResponse.error,
-            currentOrigin: window.location.origin,
-            details: tokenResponse
-          },
-        });
+        // Don't send expected auth errors to Sentry
+        if (!tokenResponse.error.includes('popup_closed') && 
+            !tokenResponse.error.includes('interaction_required') &&
+            !tokenResponse.error.includes('window.closed') &&
+            !tokenResponse.error.includes('Cross-Origin-Opener-Policy')) {
+          Sentry.captureException(new Error(errorMessage), {
+            tags: { component: 'google-calendar-auth' },
+            extra: { 
+              error: tokenResponse.error,
+              currentOrigin: window.location.origin,
+              details: tokenResponse
+            },
+          });
+        }
         this.isSignedIn = false;
         return;
       }
@@ -357,14 +369,20 @@ class GoogleCalendarService {
             if (tokenResponse.error) {
               console.error('Auth failed:', tokenResponse.error);
               
-              Sentry.captureException(new Error(`Auth failed: ${tokenResponse.error}`), {
-                tags: { component: 'google-calendar-signin' },
-                extra: { 
-                  error: tokenResponse.error,
-                  currentOrigin: window.location.origin,
-                  details: tokenResponse
-                },
-              });
+              // Don't send expected auth errors to Sentry
+              if (!tokenResponse.error.includes('popup_closed') && 
+                  !tokenResponse.error.includes('interaction_required') &&
+                  !tokenResponse.error.includes('window.closed') &&
+                  !tokenResponse.error.includes('Cross-Origin-Opener-Policy')) {
+                Sentry.captureException(new Error(`Auth failed: ${tokenResponse.error}`), {
+                  tags: { component: 'google-calendar-signin' },
+                  extra: { 
+                    error: tokenResponse.error,
+                    currentOrigin: window.location.origin,
+                    details: tokenResponse
+                  },
+                });
+              }
               resolve(false);
             } else {
               console.log('Auth successful!');

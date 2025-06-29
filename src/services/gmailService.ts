@@ -87,10 +87,17 @@ class GmailService {
             clearTimeout(this.authTimeoutId);
             this.authTimeoutId = null;
           }
-          Sentry.captureException(new Error(`Gmail OAuth error: ${JSON.stringify(error)}`), {
-            tags: { component: 'gmail-oauth-error' },
-            extra: { error, currentOrigin: window.location.origin },
-          });
+          
+          // Don't send expected auth errors to Sentry
+          if (!error.message?.includes('popup_closed') && 
+              !error.message?.includes('interaction_required') &&
+              !error.message?.includes('window.closed') &&
+              !error.message?.includes('Cross-Origin-Opener-Policy')) {
+            Sentry.captureException(new Error(`Gmail OAuth error: ${JSON.stringify(error)}`), {
+              tags: { component: 'gmail-oauth-error' },
+              extra: { error, currentOrigin: window.location.origin },
+            });
+          }
         }
       });
 
@@ -202,14 +209,20 @@ class GmailService {
           errorMessage = 'Popup blocked: Please allow popups for this site and try again.';
         }
         
-        Sentry.captureException(new Error(errorMessage), {
-          tags: { component: 'gmail-auth' },
-          extra: { 
-            error: tokenResponse.error,
-            currentOrigin: window.location.origin,
-            details: tokenResponse
-          },
-        });
+        // Don't send expected auth errors to Sentry
+        if (!tokenResponse.error.includes('popup_closed') && 
+            !tokenResponse.error.includes('interaction_required') &&
+            !tokenResponse.error.includes('window.closed') &&
+            !tokenResponse.error.includes('Cross-Origin-Opener-Policy')) {
+          Sentry.captureException(new Error(errorMessage), {
+            tags: { component: 'gmail-auth' },
+            extra: { 
+              error: tokenResponse.error,
+              currentOrigin: window.location.origin,
+              details: tokenResponse
+            },
+          });
+        }
         this.isSignedIn = false;
         return;
       }

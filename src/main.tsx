@@ -49,6 +49,15 @@ Sentry.init({
       };
     }
     
+    // Ignore OAuth popup errors - these are expected during authentication
+    if (hint.originalException && 
+        (hint.originalException.message?.includes('popup_closed') || 
+         hint.originalException.message?.includes('interaction_required') ||
+         hint.originalException.message?.includes('window.closed') ||
+         hint.originalException.message?.includes('Cross-Origin-Opener-Policy'))) {
+      return null;
+    }
+    
     return event;
   },
 });
@@ -104,7 +113,24 @@ const SentryErrorBoundary = Sentry.withErrorBoundary(SentryApp, {
       componentStack: hint.componentStack,
       errorBoundary: true,
     });
+    
+    // Ignore OAuth popup errors
+    if (error.message?.includes('popup_closed') || 
+        error.message?.includes('interaction_required') ||
+        error.message?.includes('window.closed') ||
+        error.message?.includes('Cross-Origin-Opener-Policy')) {
+      return false; // Prevent capturing this error
+    }
   },
+  onError: (error) => {
+    // Ignore OAuth popup errors
+    if (error.message?.includes('popup_closed') || 
+        error.message?.includes('interaction_required') ||
+        error.message?.includes('window.closed') ||
+        error.message?.includes('Cross-Origin-Opener-Policy')) {
+      return false; // Prevent showing error boundary
+    }
+  }
 });
 
 createRoot(document.getElementById('root')!).render(

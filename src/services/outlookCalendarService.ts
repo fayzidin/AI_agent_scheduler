@@ -251,7 +251,7 @@ class OutlookCalendarService {
       
       this.storeTokenInfo(response);
       
-      console.log('Silent Outlook Calendar auth successful!');
+      console.log('✅ Silent Outlook Calendar auth successful!');
       
       Sentry.addBreadcrumb({
         message: 'Silent Outlook authentication successful',
@@ -302,10 +302,16 @@ class OutlookCalendarService {
     } catch (error: any) {
       console.error('Interactive Outlook auth failed:', error);
       
-      Sentry.captureException(error, {
-        tags: { component: 'outlook-signin' },
-        extra: { currentOrigin: window.location.origin },
-      });
+      // Don't send expected auth errors to Sentry
+      if (!error.message?.includes('popup_closed') && 
+          !error.message?.includes('interaction_required') &&
+          !error.message?.includes('window.closed') &&
+          !error.message?.includes('Cross-Origin-Opener-Policy')) {
+        Sentry.captureException(error, {
+          tags: { component: 'outlook-signin' },
+          extra: { currentOrigin: window.location.origin },
+        });
+      }
       
       throw new Error(`Outlook authentication failed: ${error.message}`);
     }
