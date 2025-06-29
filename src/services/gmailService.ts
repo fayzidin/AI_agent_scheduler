@@ -15,6 +15,14 @@ class GmailService {
   private accessToken: string = '';
   private tokenClient: any = null;
   private currentUser: any = null;
+  private redirectUri: string;
+  private authInProgress: boolean = false;
+  private authTimeoutId: number | null = null;
+
+  constructor() {
+    // Set redirect URI for OAuth flow
+    this.redirectUri = `${window.location.origin}/google-auth-fix.html`;
+  }
 
   async initialize(): Promise<boolean> {
     if (!isGmailConfigured()) {
@@ -75,6 +83,11 @@ class GmailService {
         },
         error_callback: (error: any) => {
           console.error('Gmail OAuth error:', error);
+          this.authInProgress = false;
+          if (this.authTimeoutId) {
+            clearTimeout(this.authTimeoutId);
+            this.authTimeoutId = null;
+          }
           Sentry.captureException(new Error(`Gmail OAuth error: ${JSON.stringify(error)}`), {
             tags: { component: 'gmail-oauth-error' },
             extra: { error, currentOrigin: window.location.origin },
@@ -172,6 +185,12 @@ class GmailService {
         hasToken: !!tokenResponse.access_token,
         hasError: !!tokenResponse.error 
       });
+
+      this.authInProgress = false;
+      if (this.authTimeoutId) {
+        clearTimeout(this.authTimeoutId);
+        this.authTimeoutId = null;
+      }
 
       if (tokenResponse.error) {
         console.error('❌ Gmail token acquisition failed:', tokenResponse.error);
@@ -313,6 +332,14 @@ class GmailService {
 
         console.log('Attempting silent Gmail authentication...');
 
+        // Prevent multiple auth attempts
+        if (this.authInProgress) {
+          console.log('Authentication already in progress');
+          resolve(false);
+          return;
+        }
+        this.authInProgress = true;
+
         // Store the original callback
         const originalCallback = this.tokenClient.callback;
         
@@ -336,6 +363,7 @@ class GmailService {
           } catch (error) {
             console.error('Error in silent auth callback:', error);
             this.tokenClient.callback = originalCallback;
+            this.authInProgress = false;
             resolve(false);
           }
         };
@@ -346,16 +374,18 @@ class GmailService {
         });
 
         // Set a timeout for silent auth
-        setTimeout(() => {
+        this.authTimeoutId = window.setTimeout(() => {
           if (this.tokenClient.callback !== originalCallback) {
             console.log('Silent auth timeout');
             this.tokenClient.callback = originalCallback;
+            this.authInProgress = false;
             resolve(false);
           }
         }, 5000);
 
       } catch (error) {
         console.error('Silent auth attempt failed:', error);
+        this.authInProgress = false;
         resolve(false);
       }
     });
@@ -371,6 +401,14 @@ class GmailService {
         }
 
         console.log('Attempting interactive Gmail authentication...');
+
+        // Prevent multiple auth attempts
+        if (this.authInProgress) {
+          console.log('Authentication already in progress');
+          resolve(false);
+          return;
+        }
+        this.authInProgress = true;
 
         // Store the original callback
         const originalCallback = this.tokenClient.callback;
@@ -415,19 +453,39 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           } catch (error) {
             console.error('Error in interactive auth callback:', error);
             this.tokenClient.callback = originalCallback;
+            this.authInProgress = false;
             resolve(false);
           }
         };
+
+        // Add message listener for the redirect page
+        const messageListener = (event: MessageEvent) => {
+          if (event.data === 'auth-complete') {
+            console.log('Received auth-complete message from redirect page');
+            window.removeEventListener('message', messageListener);
+          }
+        };
+        window.addEventListener('message', messageListener);
 
         // Request access token with user interaction (popup)
         this.tokenClient.requestAccessToken({ 
           prompt: 'consent', // Show consent screen for interactive auth
           // Add these options to help with COOP issues
           ux_mode: 'popup',
-          select_account: true
+          select_account: true,
+          hint: localStorage.getItem('gmail_user_email') || undefined
         });
+
+        // Set a longer timeout for interactive auth (30 seconds)
+        this.authTimeoutId = window.setTimeout(() => {
+          console.log('Interactive auth timeout after 30 seconds');
+          this.authInProgress = false;
+          window.removeEventListener('message', messageListener);
+          resolve(false);
+        }, 30000);
       } catch (error) {
         console.error('Failed to request access token:', error);
+        this.authInProgress = false;
         resolve(false);
       }
     });
@@ -501,6 +559,9 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
               name: name,
               picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285f4&color=fff&size=40`
             };
+            
+            // Store email for future hint
+            localStorage.setItem('gmail_user_email', email);
             
             console.log('✅ Gmail user info retrieved from Gmail API profile');
             return result;

@@ -16,6 +16,8 @@ class GoogleCalendarService {
   private tokenClient: any = null;
   private currentUser: any = null;
   private redirectUri: string;
+  private authInProgress: boolean = false;
+  private authTimeoutId: number | null = null;
 
   constructor() {
     // Set redirect URI for OAuth flow
@@ -72,6 +74,11 @@ class GoogleCalendarService {
         },
         error_callback: (error: any) => {
           console.error('Google OAuth error:', error);
+          this.authInProgress = false;
+          if (this.authTimeoutId) {
+            clearTimeout(this.authTimeoutId);
+            this.authTimeoutId = null;
+          }
           Sentry.captureException(new Error(`Google OAuth error: ${JSON.stringify(error)}`), {
             tags: { component: 'google-oauth-error' },
             extra: { error, currentOrigin: window.location.origin },
@@ -127,6 +134,12 @@ class GoogleCalendarService {
         hasToken: !!tokenResponse.access_token,
         hasError: !!tokenResponse.error 
       });
+      
+      this.authInProgress = false;
+      if (this.authTimeoutId) {
+        clearTimeout(this.authTimeoutId);
+        this.authTimeoutId = null;
+      }
       
       if (tokenResponse.error) {
         console.error('Token acquisition failed:', tokenResponse.error);
@@ -327,6 +340,14 @@ class GoogleCalendarService {
 
         console.log('Attempting silent Google Calendar authentication...');
 
+        // Prevent multiple auth attempts
+        if (this.authInProgress) {
+          console.log('Authentication already in progress');
+          resolve(false);
+          return;
+        }
+        this.authInProgress = true;
+
         Sentry.addBreadcrumb({
           message: 'Attempting silent Google Calendar authentication',
           category: 'calendar',
@@ -361,6 +382,7 @@ class GoogleCalendarService {
           } catch (error) {
             console.error('Error in silent auth callback:', error);
             this.tokenClient.callback = originalCallback;
+            this.authInProgress = false;
             resolve(false);
           }
         };
@@ -371,16 +393,18 @@ class GoogleCalendarService {
         });
 
         // Set a timeout for silent auth
-        setTimeout(() => {
+        this.authTimeoutId = window.setTimeout(() => {
           if (this.tokenClient.callback !== originalCallback) {
             console.log('Silent auth timeout');
             this.tokenClient.callback = originalCallback;
+            this.authInProgress = false;
             resolve(false);
           }
         }, 5000);
 
       } catch (error) {
         console.error('Silent auth attempt failed:', error);
+        this.authInProgress = false;
         resolve(false);
       }
     });
@@ -401,6 +425,14 @@ class GoogleCalendarService {
         }
 
         console.log('Attempting interactive Google Calendar authentication...');
+
+        // Prevent multiple auth attempts
+        if (this.authInProgress) {
+          console.log('Authentication already in progress');
+          resolve(false);
+          return;
+        }
+        this.authInProgress = true;
 
         Sentry.addBreadcrumb({
           message: 'Starting interactive Google Calendar sign-in',
@@ -468,9 +500,19 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
               tags: { component: 'google-calendar-signin-callback' },
             });
             this.tokenClient.callback = originalCallback;
+            this.authInProgress = false;
             resolve(false);
           }
         };
+
+        // Add message listener for the redirect page
+        const messageListener = (event: MessageEvent) => {
+          if (event.data === 'auth-complete') {
+            console.log('Received auth-complete message from redirect page');
+            window.removeEventListener('message', messageListener);
+          }
+        };
+        window.addEventListener('message', messageListener);
 
         // Request access token with user interaction (popup)
         this.tokenClient.requestAccessToken({ 
@@ -480,12 +522,21 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           select_account: true,
           hint: localStorage.getItem('google_user_email') || undefined
         });
+
+        // Set a longer timeout for interactive auth (30 seconds)
+        this.authTimeoutId = window.setTimeout(() => {
+          console.log('Interactive auth timeout after 30 seconds');
+          this.authInProgress = false;
+          window.removeEventListener('message', messageListener);
+          resolve(false);
+        }, 30000);
       } catch (error) {
         console.error('Failed to request access token:', error);
         Sentry.captureException(error, {
           tags: { component: 'google-calendar-signin' },
           extra: { currentOrigin: window.location.origin },
         });
+        this.authInProgress = false;
         resolve(false);
       }
     });

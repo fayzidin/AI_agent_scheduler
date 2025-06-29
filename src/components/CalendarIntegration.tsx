@@ -35,6 +35,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
   const [connectionError, setConnectionError] = useState<string>('');
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [authAttempts, setAuthAttempts] = useState(0);
+  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
 
   useEffect(() => {
     setProviders(calendarService.getProviders());
@@ -106,7 +107,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
       } else if (error.message?.includes('popup_blocked')) {
         errorMessage = 'Popup blocked. Please allow popups for this site and try again.';
       } else if (error.message?.includes('popup_closed')) {
-        errorMessage = 'Authentication canceled. The sign-in popup was closed.';
+        errorMessage = 'Authentication canceled. The sign-in popup was closed before completion. Please try again and complete the sign-in process.';
       } else if (error.message?.includes('interaction_required')) {
         errorMessage = 'Interactive authentication required. Please try again.';
       } else if (error.message?.includes('COOP')) {
@@ -114,6 +115,11 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
       }
       
       setConnectionError(errorMessage);
+      
+      // Show troubleshooting tips after multiple failed attempts
+      if (authAttempts > 1) {
+        setShowTroubleshooting(true);
+      }
     } finally {
       setIsConnecting(null);
     }
@@ -901,31 +907,63 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
         )}
 
         {/* Troubleshooting Guide */}
-        {authAttempts > 1 && connectionError && (
+        {(authAttempts > 1 || showTroubleshooting) && (
           <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-            <div className="flex items-center mb-2">
-              <Settings className="w-5 h-5 text-blue-400 mr-3" />
-              <h5 className="text-blue-300 font-semibold">Troubleshooting Guide</h5>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center">
+                <Settings className="w-5 h-5 text-blue-400 mr-3" />
+                <h5 className="text-blue-300 font-semibold">Troubleshooting Guide</h5>
+              </div>
+              <button 
+                onClick={() => setShowTroubleshooting(!showTroubleshooting)}
+                className="text-blue-300 hover:text-blue-200 text-sm"
+              >
+                {showTroubleshooting ? 'Hide' : 'Show More'}
+              </button>
             </div>
-            <div className="text-blue-200 text-sm space-y-2">
-              <p>If you're having trouble connecting to Google Calendar:</p>
-              <ol className="list-decimal list-inside space-y-1 pl-2">
-                <li>Try using a different browser (Chrome or Edge recommended)</li>
-                <li>Check if popups are allowed for this site</li>
-                <li>Try using incognito/private browsing mode</li>
-                <li>Clear your browser cookies and cache</li>
-                <li>Check if your browser has strict privacy settings that might block authentication</li>
-              </ol>
-              <p className="mt-2">
-                <a 
-                  href="/GOOGLE_OAUTH_TROUBLESHOOTING_COOP.md" 
-                  target="_blank" 
-                  className="text-blue-300 underline hover:text-blue-200"
-                >
-                  View detailed troubleshooting guide
-                </a>
-              </p>
-            </div>
+            
+            {showTroubleshooting && (
+              <div className="text-blue-200 text-sm space-y-4 mt-2">
+                <div>
+                  <p className="font-semibold mb-2">If you're having trouble connecting to Google Calendar:</p>
+                  <ol className="list-decimal list-inside space-y-1 pl-2">
+                    <li>Try using a different browser (Chrome or Edge recommended)</li>
+                    <li>Check if popups are allowed for this site</li>
+                    <li>Try using incognito/private browsing mode</li>
+                    <li>Clear your browser cookies and cache</li>
+                    <li>Check if your browser has strict privacy settings that might block authentication</li>
+                  </ol>
+                </div>
+                
+                <div className="p-3 bg-blue-500/20 rounded-lg">
+                  <p className="font-semibold mb-2">Common Issues:</p>
+                  <ul className="space-y-2">
+                    <li><strong>Popup Closing Too Quickly:</strong> When the authentication popup appears, you need to complete the sign-in process before it closes. Make sure to enter your credentials quickly.</li>
+                    <li><strong>COOP Errors:</strong> Some browsers have strict security settings that can interfere with the authentication popup. Try using Chrome or Edge, which generally work better with Google's authentication.</li>
+                    <li><strong>Multiple Google Accounts:</strong> If you have multiple Google accounts, make sure to select the correct one during authentication.</li>
+                  </ul>
+                </div>
+                
+                <div>
+                  <p className="font-semibold mb-2">Alternative Methods:</p>
+                  <ul className="space-y-1">
+                    <li>• Use the manual calendar export option below instead of connecting your account</li>
+                    <li>• Try connecting from a different device or network</li>
+                    <li>• Check if any browser extensions might be interfering with authentication</li>
+                  </ul>
+                </div>
+                
+                <p className="mt-2">
+                  <a 
+                    href="/GOOGLE_OAUTH_TROUBLESHOOTING_COOP.md" 
+                    target="_blank" 
+                    className="text-blue-300 underline hover:text-blue-200"
+                  >
+                    View detailed troubleshooting guide
+                  </a>
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

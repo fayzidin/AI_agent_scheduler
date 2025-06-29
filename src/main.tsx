@@ -18,12 +18,16 @@ Sentry.init({
         /^https:\/\/.*\.googleapis\.com/,
       ],
     }),
-    new Sentry.Replay(),
+    new Sentry.Replay({
+      // Reduced session sample rate to avoid 429 errors
+      sessionSampleRate: 0.1,
+      errorSampleRate: 1.0,
+    }),
   ],
   // Performance Monitoring
   tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
   // Session Replay - Updated configuration to prevent 429 errors
-  replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 0, // Set to 0 in development
+  replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 0.1, // Reduced in both environments
   replaysOnErrorSampleRate: 1.0,
   // Release Health
   autoSessionTracking: true,
