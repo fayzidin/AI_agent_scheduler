@@ -65,7 +65,8 @@ class OutlookService {
       this.isInitialized = true;
       
       // Try to restore from stored session
-      this.loadStoredToken();
+      const existingToken = this.loadStoredToken();
+      this.isSignedIn = !!existingToken;
       
       console.log('✅ Outlook API initialized successfully with MSAL');
       
@@ -74,7 +75,7 @@ class OutlookService {
         category: 'outlook',
         level: 'info',
         data: { 
-          hasStoredToken: !!this.accessToken,
+          hasStoredToken: !!existingToken,
           currentOrigin: window.location.origin,
           scopes: config.scopes
         },

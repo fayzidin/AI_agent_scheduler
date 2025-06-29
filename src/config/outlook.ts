@@ -14,14 +14,13 @@ export const getOutlookConfig = (): OutlookConfig => {
 
   return {
     clientId: clientId || '',
-    // Changed from 'common' to 'consumers' to allow personal accounts
+    // Use consumers tenant for personal Microsoft accounts
     authority: 'https://login.microsoftonline.com/consumers',
     redirectUri: window.location.origin,
     scopes: [
       'https://graph.microsoft.com/Mail.Read',
       'https://graph.microsoft.com/User.Read',
       'https://graph.microsoft.com/Calendars.Read',
-      'https://graph.microsoft.com/Calendars.ReadWrite',
       'openid',
       'profile',
       'email'

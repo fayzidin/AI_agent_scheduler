@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Mail, 
@@ -129,7 +129,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
 
     setIsConnecting(providerId);
     setConnectionError('');
-
+    
     try {
       console.log(`🔗 Connecting to ${provider.name} with ${provider.accessLevel} access...`);
       await onAccountConnect(providerId);
@@ -158,7 +158,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
       
       setConnectionError(errorMessage);
     } finally {
-      setIsConnecting(false);
+      setIsConnecting(null);
     }
   };
 
@@ -332,7 +332,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                           e.stopPropagation();
                           handleConnect(provider.id);
                         }}
-                        disabled={isConnecting || provider.status === 'coming_soon'}
+                        disabled={isConnecting === provider.id || provider.status === 'coming_soon'}
                         className={`px-6 py-3 font-semibold rounded-xl transition-all duration-200 flex items-center space-x-2 ${
                           provider.status === 'configured'
                             ? 'bg-gradient-to-r from-green-500 to-blue-600 text-white hover:from-green-600 hover:to-blue-700'
@@ -341,7 +341,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                             : 'bg-blue-500/20 text-blue-300 cursor-not-allowed'
                         }`}
                       >
-                        {isConnecting ? (
+                        {isConnecting === provider.id ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
                             <span>Connecting...</span>
