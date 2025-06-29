@@ -22,8 +22,8 @@ Sentry.init({
   ],
   // Performance Monitoring
   tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
-  // Session Replay - Updated configuration
-  replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+  // Session Replay - Updated configuration to prevent 429 errors
+  replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 0, // Set to 0 in development
   replaysOnErrorSampleRate: 1.0,
   // Release Health
   autoSessionTracking: true,
