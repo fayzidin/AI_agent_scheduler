@@ -20,7 +20,7 @@ If you're getting "Failed to connect to Outlook" errors, it's likely because you
    - Click **+ New registration**
    - **Name**: AI Meeting Assistant
    - **Supported account types**: Accounts in any organizational directory and personal Microsoft accounts
-   - **Redirect URI**: Web → `https://your-domain.com` (and add your development URL)
+   - **Redirect URI**: Web → `https://aima.netlify.app` (and add your development URL)
    - Click **Register**
 
 ### **Step 2: Configure API Permissions**
@@ -48,7 +48,7 @@ If you're getting "Failed to connect to Outlook" errors, it's likely because you
    - Select **Web**
    - Add these redirect URIs:
      ```
-     https://your-domain.com
+     https://aima.netlify.app
      http://localhost:5173
      https://localhost:5173
      ```
@@ -112,6 +112,13 @@ VITE_OUTLOOK_CLIENT_ID=your-microsoft-client-id
 ### **"Popup blocked"**
 - Allow popups for this site
 - Try again after allowing popups
+
+### **"Failed to load Microsoft Authentication Library"**
+- Refresh the page
+- Check your internet connection
+- Disable content blockers or ad blockers
+- Try a different browser
+- Clear browser cache and cookies
 
 ## 📋 **Verification Checklist**
 

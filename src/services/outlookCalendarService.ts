@@ -51,7 +51,8 @@ class OutlookCalendarService {
       this.isInitialized = true;
       
       // Check if we already have a valid token
-      this.loadStoredToken();
+      const existingToken = this.loadStoredToken();
+      this.isSignedIn = !!existingToken;
       
       console.log('Outlook Calendar API initialized successfully');
       
@@ -60,7 +61,7 @@ class OutlookCalendarService {
         category: 'calendar',
         level: 'info',
         data: { 
-          hasExistingToken: !!this.accessToken,
+          hasExistingToken: !!existingToken,
           currentOrigin: window.location.origin 
         },
       });

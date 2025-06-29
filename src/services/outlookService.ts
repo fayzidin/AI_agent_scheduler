@@ -194,6 +194,7 @@ class OutlookService {
         console.log('🔄 Restored Outlook session from storage');
         return true;
       } else {
+        // Token expired, remove it
         sessionStorage.removeItem('outlook_token');
         console.log('🗑️ Removed expired Outlook token');
         return false;
@@ -301,7 +302,7 @@ class OutlookService {
         prompt: 'select_account'
       };
 
-      console.log('🔑 Requesting Outlook access token...');
+      console.log('🔑 Requesting Outlook access token with interactive login...');
 
       Sentry.addBreadcrumb({
         message: 'Starting interactive Outlook sign-in',

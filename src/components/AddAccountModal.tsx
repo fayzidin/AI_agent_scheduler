@@ -36,7 +36,7 @@ interface EmailProvider {
 
 const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountConnect }) => {
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [connectionError, setConnectionError] = useState<string>('');
 
@@ -127,7 +127,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
       return;
     }
 
-    setIsConnecting(true);
+    setIsConnecting(providerId);
     setConnectionError('');
 
     try {
