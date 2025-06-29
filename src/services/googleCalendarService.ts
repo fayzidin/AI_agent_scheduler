@@ -15,15 +15,16 @@ class GoogleCalendarService {
   private gapi: any = null;
   private tokenClient: any = null;
   private currentUser: any = null;
-  private redirectUri: string;
   private authInProgress: boolean = false;
   private authTimeoutId: number | null = null;
-  private popupWindow: Window | null = null;
-  private popupCheckInterval: number | null = null;
 
   constructor() {
-    // Set redirect URI for OAuth flow
-    this.redirectUri = `${window.location.origin}/google-auth-fix.html`;
+    // Initialize on construction
+    if (typeof window !== 'undefined') {
+      this.initialize().catch(err => {
+        console.error('Failed to initialize Google Calendar service:', err);
+      });
+    }
   }
 
   async initialize(): Promise<boolean> {
@@ -67,7 +68,7 @@ class GoogleCalendarService {
 
       this.gapi = window.gapi;
 
-      // Initialize Google Identity Services token client with improved configuration
+      // Initialize Google Identity Services token client with simplified configuration
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
         scope: config.scopes.join(' '),
@@ -81,19 +82,11 @@ class GoogleCalendarService {
             clearTimeout(this.authTimeoutId);
             this.authTimeoutId = null;
           }
-          if (this.popupCheckInterval) {
-            clearInterval(this.popupCheckInterval);
-            this.popupCheckInterval = null;
-          }
           Sentry.captureException(new Error(`Google OAuth error: ${JSON.stringify(error)}`), {
             tags: { component: 'google-oauth-error' },
             extra: { error, currentOrigin: window.location.origin },
           });
-        },
-        // Add these options to help with COOP issues
-        ux_mode: 'popup',
-        select_account: true,
-        hint: localStorage.getItem('google_user_email') || undefined
+        }
       });
 
       this.isInitialized = true;
@@ -145,10 +138,6 @@ class GoogleCalendarService {
       if (this.authTimeoutId) {
         clearTimeout(this.authTimeoutId);
         this.authTimeoutId = null;
-      }
-      if (this.popupCheckInterval) {
-        clearInterval(this.popupCheckInterval);
-        this.popupCheckInterval = null;
       }
       
       if (tokenResponse.error) {
@@ -329,26 +318,16 @@ class GoogleCalendarService {
       return true;
     }
 
-    // Try silent authentication first (no popup)
-    const silentSuccess = await this.attemptSilentAuth();
-    if (silentSuccess) {
-      return true;
-    }
-
-    // If silent auth fails, fall back to interactive auth
-    return this.attemptInteractiveAuth();
-  }
-
-  private async attemptSilentAuth(): Promise<boolean> {
+    // Use a simpler approach - just request token with consent
     return new Promise((resolve) => {
       try {
         if (!this.tokenClient) {
-          console.log('Token client not initialized for silent auth');
+          console.error('Token client not initialized');
           resolve(false);
           return;
         }
 
-        console.log('Attempting silent Google Calendar authentication...');
+        console.log('Requesting Google Calendar access token...');
 
         // Prevent multiple auth attempts
         if (this.authInProgress) {
@@ -359,93 +338,7 @@ class GoogleCalendarService {
         this.authInProgress = true;
 
         Sentry.addBreadcrumb({
-          message: 'Attempting silent Google Calendar authentication',
-          category: 'calendar',
-          level: 'info',
-        });
-
-        // Store the original callback
-        const originalCallback = this.tokenClient.callback;
-        
-        // Set up silent auth callback
-        this.tokenClient.callback = (tokenResponse: any) => {
-          try {
-            // Call original callback first
-            originalCallback(tokenResponse);
-            
-            // Resolve based on success/failure
-            if (tokenResponse.error) {
-              console.log('Silent auth failed:', tokenResponse.error);
-              resolve(false);
-            } else {
-              console.log('Silent auth successful!');
-              Sentry.addBreadcrumb({
-                message: 'Silent Google Calendar authentication successful',
-                category: 'calendar',
-                level: 'info',
-              });
-              resolve(true);
-            }
-            
-            // Restore original callback
-            this.tokenClient.callback = originalCallback;
-          } catch (error) {
-            console.error('Error in silent auth callback:', error);
-            this.tokenClient.callback = originalCallback;
-            this.authInProgress = false;
-            resolve(false);
-          }
-        };
-
-        // Request access token silently (no user interaction)
-        this.tokenClient.requestAccessToken({ 
-          prompt: 'none' // This is the key - no user prompt
-        });
-
-        // Set a timeout for silent auth
-        this.authTimeoutId = window.setTimeout(() => {
-          if (this.tokenClient.callback !== originalCallback) {
-            console.log('Silent auth timeout');
-            this.tokenClient.callback = originalCallback;
-            this.authInProgress = false;
-            resolve(false);
-          }
-        }, 5000);
-
-      } catch (error) {
-        console.error('Silent auth attempt failed:', error);
-        this.authInProgress = false;
-        resolve(false);
-      }
-    });
-  }
-
-  private async attemptInteractiveAuth(): Promise<boolean> {
-    return new Promise((resolve) => {
-      try {
-        if (!this.tokenClient) {
-          console.error('Token client not initialized for interactive auth');
-          Sentry.captureMessage('Token client not initialized', {
-            level: 'error',
-            tags: { component: 'google-calendar-signin' },
-            extra: { currentOrigin: window.location.origin },
-          });
-          resolve(false);
-          return;
-        }
-
-        console.log('Attempting interactive Google Calendar authentication...');
-
-        // Prevent multiple auth attempts
-        if (this.authInProgress) {
-          console.log('Authentication already in progress');
-          resolve(false);
-          return;
-        }
-        this.authInProgress = true;
-
-        Sentry.addBreadcrumb({
-          message: 'Starting interactive Google Calendar sign-in',
+          message: 'Starting Google Calendar sign-in',
           category: 'calendar',
           level: 'info',
           data: { currentOrigin: window.location.origin },
@@ -462,28 +355,9 @@ class GoogleCalendarService {
             
             // Resolve the promise based on success/failure
             if (tokenResponse.error) {
-              console.error('Interactive auth failed:', tokenResponse.error);
+              console.error('Auth failed:', tokenResponse.error);
               
-              // Provide helpful error messages
-              if (tokenResponse.error === 'redirect_uri_mismatch') {
-                console.error(`
-🚨 OAuth Configuration Error:
-
-The current domain (${window.location.origin}) is not authorized in your Google Cloud Console.
-
-To fix this:
-1. Go to https://console.cloud.google.com/
-2. Navigate to APIs & Services → Credentials
-3. Edit your OAuth 2.0 Client ID
-4. Add this URL to "Authorized JavaScript origins":
-   ${window.location.origin}
-5. Save and wait 5-10 minutes for changes to propagate
-
-See GOOGLE_OAUTH_SETUP.md for detailed instructions.
-                `);
-              }
-              
-              Sentry.captureException(new Error(`Interactive auth failed: ${tokenResponse.error}`), {
+              Sentry.captureException(new Error(`Auth failed: ${tokenResponse.error}`), {
                 tags: { component: 'google-calendar-signin' },
                 extra: { 
                   error: tokenResponse.error,
@@ -493,9 +367,9 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
               });
               resolve(false);
             } else {
-              console.log('Interactive auth successful!');
+              console.log('Auth successful!');
               Sentry.addBreadcrumb({
-                message: 'Interactive Google Calendar sign-in successful',
+                message: 'Google Calendar sign-in successful',
                 category: 'calendar',
                 level: 'info',
               });
@@ -505,7 +379,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
             // Restore original callback
             this.tokenClient.callback = originalCallback;
           } catch (error) {
-            console.error('Error in interactive auth callback:', error);
+            console.error('Error in auth callback:', error);
             Sentry.captureException(error, {
               tags: { component: 'google-calendar-signin-callback' },
             });
@@ -515,72 +389,17 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           }
         };
 
-        // Add message listener for the redirect page
-        const messageListener = (event: MessageEvent) => {
-          if (event.data === 'auth-complete') {
-            console.log('Received auth-complete message from redirect page');
-            window.removeEventListener('message', messageListener);
-          }
-        };
-        window.addEventListener('message', messageListener);
-
-        // Open a popup window manually to give more time for authentication
-        const width = 500;
-        const height = 600;
-        const left = window.screenX + (window.outerWidth - width) / 2;
-        const top = window.screenY + (window.outerHeight - height) / 2;
-        
-        // Create a popup window first
-        this.popupWindow = window.open(
-          'about:blank',
-          'google-calendar-auth-popup',
-          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
-        );
-        
-        if (!this.popupWindow) {
-          console.error('Failed to open popup window - likely blocked by browser');
-          alert('Popup blocked! Please allow popups for this site and try again.');
-          this.authInProgress = false;
-          window.removeEventListener('message', messageListener);
-          resolve(false);
-          return;
-        }
-        
-        // Check if popup is closed prematurely
-        this.popupCheckInterval = window.setInterval(() => {
-          if (this.popupWindow && this.popupWindow.closed) {
-            console.log('Auth popup closed by user');
-            clearInterval(this.popupCheckInterval!);
-            this.popupCheckInterval = null;
-            this.authInProgress = false;
-            window.removeEventListener('message', messageListener);
-            resolve(false);
-          }
-        }, 1000);
-
-        // Request access token with user interaction (popup)
+        // Request access token with consent
         this.tokenClient.requestAccessToken({ 
-          prompt: 'consent', // Show consent screen for interactive auth
-          // Add these options to help with COOP issues
-          ux_mode: 'popup',
-          select_account: true,
-          hint: localStorage.getItem('google_user_email') || undefined
+          prompt: 'consent'
         });
 
-        // Set a longer timeout for interactive auth (60 seconds)
+        // Set a timeout for auth (2 minutes)
         this.authTimeoutId = window.setTimeout(() => {
-          console.log('Interactive auth timeout after 60 seconds');
+          console.log('Auth timeout after 2 minutes');
           this.authInProgress = false;
-          if (this.popupCheckInterval) {
-            clearInterval(this.popupCheckInterval);
-            this.popupCheckInterval = null;
-          }
-          if (this.popupWindow && !this.popupWindow.closed) {
-            this.popupWindow.close();
-          }
-          window.removeEventListener('message', messageListener);
           resolve(false);
-        }, 60000);
+        }, 120000);
       } catch (error) {
         console.error('Failed to request access token:', error);
         Sentry.captureException(error, {

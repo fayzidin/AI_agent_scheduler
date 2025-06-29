@@ -36,6 +36,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [authAttempts, setAuthAttempts] = useState(0);
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
+  const [showSimpleInstructions, setShowSimpleInstructions] = useState(false);
 
   useEffect(() => {
     setProviders(calendarService.getProviders());
@@ -72,14 +73,10 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
     setIsConnecting(providerId);
     setConnectionError('');
     setAuthAttempts(prev => prev + 1);
+    setShowSimpleInstructions(true);
     
     try {
       console.log(`🔗 Connecting to ${providerId} calendar...`);
-      
-      // Show user-friendly message for Google Calendar
-      if (providerId === 'google') {
-        console.log('📅 Attempting silent authentication first (no popup)...');
-      }
       
       const success = await calendarService.connectProvider(providerId);
       if (success) {
@@ -512,6 +509,22 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                 />
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Simple Connection Instructions */}
+        {showSimpleInstructions && !hasConnectedProvider() && (
+          <div className="mb-6 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+            <div className="flex items-center mb-3">
+              <Info className="w-5 h-5 text-blue-400 mr-3" />
+              <h5 className="text-blue-300 font-semibold">Simple Connection Instructions</h5>
+            </div>
+            <ol className="list-decimal list-inside space-y-2 text-blue-200 text-sm">
+              <li><strong>Before connecting:</strong> Make sure you're already signed into your Google account in another browser tab</li>
+              <li><strong>When the consent screen appears:</strong> Select your Google account and click "Continue"</li>
+              <li><strong>Grant permissions:</strong> Click "Continue" to allow access to your calendar</li>
+              <li><strong>Wait for completion:</strong> The process will finish automatically</li>
+            </ol>
           </div>
         )}
 
