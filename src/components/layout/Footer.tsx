@@ -177,15 +177,6 @@ const Footer: React.FC = () => {
                 <Linkedin className="w-5 h-5" />
               </a>
               <a 
-                href="https://github.com/fayzidin/AI_agent_scheduler" 
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-indigo-300 hover:text-white transition-colors"
-                aria-label="View on GitHub"
-              >
-                <Github className="w-5 h-5" />
-              </a>
-              <a 
                 href="mailto:support@aimeetingassistant.com" 
                 className="text-indigo-300 hover:text-white transition-colors"
                 aria-label="Email Support"
@@ -247,14 +238,6 @@ const Footer: React.FC = () => {
               className="opacity-70 hover:opacity-100 transition-opacity"
             >
               <img src="/sentry.svg" alt="Sentry" className="h-8" />
-            </a>
-            <a 
-              href="https://github.com/fayzidin/AI_agent_scheduler" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="opacity-70 hover:opacity-100 transition-opacity"
-            >
-              <img src="/github.svg" alt="GitHub" className="h-8" />
             </a>
           </div>
         </div>
