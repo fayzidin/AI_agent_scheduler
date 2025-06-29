@@ -14,8 +14,8 @@ export const getOutlookConfig = (): OutlookConfig => {
 
   return {
     clientId: clientId || '',
-    // Use consumers tenant for personal Microsoft accounts
-    authority: 'https://login.microsoftonline.com/consumers',
+    // Use common tenant for both work and personal accounts
+    authority: 'https://login.microsoftonline.com/common',
     redirectUri: window.location.origin,
     scopes: [
       'https://graph.microsoft.com/Mail.Read',

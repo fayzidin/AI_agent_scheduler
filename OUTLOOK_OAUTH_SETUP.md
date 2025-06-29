@@ -2,11 +2,11 @@
 
 ## 🚨 **Current Error Analysis**
 
-If you're getting "You can't sign in here with a personal account" errors, it's because the Microsoft Azure App Registration is configured for organizational accounts only.
+The error `AADSTS70002: The provided request must include a 'client_secret' input parameter` occurs because the Microsoft authentication flow is expecting a client secret, which is not required for public client applications like web apps using MSAL.js.
 
-## 🛠️ **Quick Setup Steps**
+## 🛠️ **Quick Fix Steps**
 
-### **Step 1: Create an Azure App Registration**
+### **Step 1: Create a New Azure App Registration**
 
 1. **Go to Azure Portal:**
    - Visit: https://portal.azure.com/
@@ -34,7 +34,6 @@ If you're getting "You can't sign in here with a personal account" errors, it's 
      - `Mail.Read` (Read user mail)
      - `User.Read` (Read user profile)
      - `Calendars.Read` (Read user calendars)
-     - `Calendars.ReadWrite` (Optional - for creating events)
    - Click **Add permissions**
 
 2. **Grant Admin Consent:**
@@ -45,7 +44,7 @@ If you're getting "You can't sign in here with a personal account" errors, it's 
 
 1. **Go to Authentication:**
    - Click **+ Add a platform**
-   - Select **Web**
+   - Select **Single-page application (SPA)** (NOT Web)
    - Add these redirect URIs:
      ```
      https://aima.netlify.app
@@ -55,10 +54,9 @@ If you're getting "You can't sign in here with a personal account" errors, it's 
    - Check **Access tokens** and **ID tokens**
    - Click **Configure**
 
-2. **Configure Advanced Settings:**
-   - Under **Implicit grant and hybrid flows**
-   - Check **ID tokens** and **Access tokens**
-   - Click **Save**
+2. **Important: Use SPA Platform Type**
+   - The error occurs because you're using the "Web" platform type, which requires a client secret
+   - SPA applications don't use client secrets, so this will fix the error
 
 ### **Step 4: Get Your Client ID**
 
@@ -91,24 +89,22 @@ VITE_OUTLOOK_CLIENT_ID=your-microsoft-client-id
    - Go to Email Dashboard
    - Click "Add Account" → "Microsoft Outlook"
    - Click "Connect"
-   - Should now work with personal accounts
+   - Should now work without the client_secret error
 
 ## 🚨 **Common Issues & Solutions**
 
+### **"client_secret required" error**
+- Make sure you selected "Single-page application (SPA)" as the platform type, not "Web"
+- Web platform requires a client secret, SPA doesn't
+
 ### **"You can't sign in here with a personal account"**
 - Make sure you selected "Accounts in any organizational directory and personal Microsoft accounts" during app registration
-- Check that your authority is set to "consumers" in the code
-- Try creating a new app registration with the correct settings
+- Check that your authority is set to "common" in the code
 
 ### **"Access blocked"**
 - Check authorized redirect URIs are correct
 - Wait 5-10 minutes after saving changes
 - Try incognito mode
-
-### **"Invalid client"**
-- Verify Client ID is correct
-- Check if APIs are enabled
-- Ensure app registration is active
 
 ### **"Popup blocked"**
 - Allow popups for this site
@@ -117,10 +113,11 @@ VITE_OUTLOOK_CLIENT_ID=your-microsoft-client-id
 ## 📋 **Verification Checklist**
 
 - [ ] Azure App registration created with personal account support
+- [ ] Platform type set to "Single-page application (SPA)"
 - [ ] Microsoft Graph API permissions added
 - [ ] Redirect URIs configured correctly
 - [ ] Client ID copied to environment variables
-- [ ] Authority set to "consumers" in code
+- [ ] Authority set to "common" in code
 - [ ] Browser cache cleared
 - [ ] Development server restarted
 
@@ -159,4 +156,4 @@ If you're still getting errors:
 
 ---
 
-**🎉 After following these steps, your Outlook integration should work with personal accounts!**
+**🎉 After following these steps, your Outlook integration should work without the client_secret error!**
