@@ -22,6 +22,8 @@ const GmailRoom: React.FC = () => {
   const [userInfo, setUserInfo] = useState<any>(null);
   const [emailFilter, setEmailFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [showCalendarIntegration, setShowCalendarIntegration] = useState(false);
+  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
+  const [authAttempts, setAuthAttempts] = useState(0);
 
   useEffect(() => {
     checkConnection();
@@ -64,6 +66,7 @@ const GmailRoom: React.FC = () => {
 
     setIsConnecting(true);
     setConnectionError('');
+    setAuthAttempts(prev => prev + 1);
     
     try {
       console.log('🔗 Starting Gmail connection process...');
@@ -102,6 +105,9 @@ const GmailRoom: React.FC = () => {
         errorMessage = 'Popup blocked. Please allow popups for this site and try again.';
       } else if (error.message?.includes('access_denied')) {
         errorMessage = 'Access denied. Please grant permission to access your Gmail account.';
+      } else if (error.message?.includes('popup_closed') || error.message?.includes('Popup window closed')) {
+        errorMessage = 'Authentication canceled. The sign-in popup was closed before completion. Please try again and complete the sign-in process.';
+        setShowTroubleshooting(true);
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -421,8 +427,73 @@ const GmailRoom: React.FC = () => {
                     </ol>
                   </div>
                 )}
+                
+                {connectionError.includes('popup') && (
+                  <div className="mt-3 text-red-200 text-sm">
+                    <p className="font-semibold">Popup Troubleshooting:</p>
+                    <ol className="list-decimal list-inside space-y-1 mt-1">
+                      <li>Make sure you're already signed into your Google account in another tab</li>
+                      <li>When the popup appears, complete the sign-in process quickly</li>
+                      <li>Try using Chrome or Edge browser for better compatibility</li>
+                      <li>Disable any popup blocker extensions</li>
+                      <li>Try using incognito/private browsing mode</li>
+                    </ol>
+                    <button 
+                      onClick={() => setShowTroubleshooting(!showTroubleshooting)}
+                      className="mt-2 text-red-300 hover:text-red-200 underline text-sm"
+                    >
+                      {showTroubleshooting ? "Hide detailed troubleshooting" : "Show detailed troubleshooting"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
+            
+            {/* Detailed troubleshooting guide */}
+            {showTroubleshooting && (
+              <div className="mt-4 p-4 bg-red-500/20 rounded-lg">
+                <h5 className="text-red-300 font-semibold mb-2">Detailed Troubleshooting Guide</h5>
+                
+                <div className="space-y-3 text-red-200 text-sm">
+                  <p><strong>1. Browser Compatibility:</strong> Google's authentication works best with Chrome and Edge. Firefox and Safari may have stricter security settings that can interfere with the authentication popup.</p>
+                  
+                  <p><strong>2. Sign in to Google first:</strong> Before connecting, sign in to your Google account in another tab. This makes the authentication process much faster and more reliable.</p>
+                  
+                  <p><strong>3. Clear browser data:</strong> Go to your browser settings and clear cookies and site data specifically for accounts.google.com.</p>
+                  
+                  <p><strong>4. Disable extensions:</strong> Temporarily disable any privacy or ad-blocking extensions that might interfere with popups or third-party cookies.</p>
+                  
+                  <p><strong>5. Try incognito/private mode:</strong> This can bypass some browser extensions and cached credentials that might be causing issues.</p>
+                  
+                  <p><strong>6. Check for multiple Google accounts:</strong> If you have multiple Google accounts, the selection process in the popup might time out. Try signing out of all accounts except the one you want to use.</p>
+                  
+                  <p><strong>7. Allow third-party cookies:</strong> Make sure your browser allows third-party cookies, at least for accounts.google.com.</p>
+                  
+                  <p><strong>8. Check your internet connection:</strong> A slow or unstable connection can cause the authentication process to time out.</p>
+                </div>
+                
+                <div className="mt-4 p-3 bg-blue-500/20 rounded-lg border border-blue-500/20">
+                  <p className="text-blue-200 text-sm">
+                    <strong>Alternative approach:</strong> If you continue to have issues, try refreshing the page and attempting to connect again. Sometimes the authentication flow works better on a fresh page load.
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {/* Retry button for authentication errors */}
+            {(connectionError.includes('authentication') || 
+              connectionError.includes('popup') || 
+              connectionError.includes('OAuth') ||
+              connectionError.includes('closed')) && (
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={handleConnect}
+                  className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg text-sm hover:bg-blue-500/30 transition-all duration-200"
+                >
+                  Try Again
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -700,6 +771,98 @@ const GmailRoom: React.FC = () => {
             setIsScheduling(false);
           }}
         />
+      )}
+      
+      {/* Troubleshooting Guide for Authentication Issues */}
+      {(authAttempts > 1 || showTroubleshooting) && !isConnected && (
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-xl font-bold text-white flex items-center">
+              <Settings className="w-5 h-5 mr-2 text-blue-400" />
+              Gmail Authentication Troubleshooting
+            </h4>
+            <button 
+              onClick={() => setShowTroubleshooting(!showTroubleshooting)}
+              className="text-blue-300 hover:text-blue-200 text-sm"
+            >
+              {showTroubleshooting ? "Hide Details" : "Show Details"}
+            </button>
+          </div>
+          
+          {showTroubleshooting && (
+            <div className="space-y-4">
+              <div className="bg-white/5 rounded-xl p-4">
+                <h5 className="text-white font-semibold mb-3">Common Issues & Solutions</h5>
+                
+                <div className="space-y-4 text-indigo-200 text-sm">
+                  <div>
+                    <p className="font-semibold text-blue-300">Popup Closing Too Quickly</p>
+                    <ul className="list-disc list-inside space-y-1 mt-1">
+                      <li>Sign in to your Google account in another tab <strong>before</strong> connecting</li>
+                      <li>When the popup appears, click your account immediately</li>
+                      <li>Complete the authentication process quickly</li>
+                      <li>Don't close the popup until authentication completes</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <p className="font-semibold text-blue-300">Browser Compatibility</p>
+                    <ul className="list-disc list-inside space-y-1 mt-1">
+                      <li>Chrome and Edge work best with Google authentication</li>
+                      <li>Firefox and Safari may have stricter security settings</li>
+                      <li>Try using incognito/private browsing mode</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <p className="font-semibold text-blue-300">Multiple Google Accounts</p>
+                    <ul className="list-disc list-inside space-y-1 mt-1">
+                      <li>If you have multiple Google accounts, the selection process might time out</li>
+                      <li>Try signing out of all accounts except the one you want to use</li>
+                      <li>Or select your account quickly when prompted</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <p className="font-semibold text-blue-300">Browser Settings</p>
+                    <ul className="list-disc list-inside space-y-1 mt-1">
+                      <li>Allow popups for this site</li>
+                      <li>Allow third-party cookies (at least for accounts.google.com)</li>
+                      <li>Disable any privacy extensions temporarily</li>
+                      <li>Clear browser cache and cookies</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+                <h5 className="text-green-300 font-semibold mb-2">Step-by-Step Guide</h5>
+                <ol className="list-decimal list-inside space-y-2 text-green-200 text-sm">
+                  <li>Open a new tab and sign in to your Google account</li>
+                  <li>Return to this tab and click "Connect Real Gmail"</li>
+                  <li>When the popup appears, select your account immediately</li>
+                  <li>Grant the requested permissions</li>
+                  <li>Wait for the popup to close automatically</li>
+                </ol>
+              </div>
+              
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={handleConnect}
+                  disabled={isConnecting}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-3"
+                >
+                  {isConnecting ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Mail className="w-5 h-5" />
+                  )}
+                  <span>Try Connecting Again</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -43,6 +43,7 @@ const EmailDashboard: React.FC = () => {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showAccountDetails, setShowAccountDetails] = useState(false);
+  const [connectionError, setConnectionError] = useState<string>('');
 
   useEffect(() => {
     if (user) {
@@ -170,6 +171,7 @@ const EmailDashboard: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load connected accounts:', error);
+      setConnectionError('Failed to load connected accounts. Please try refreshing the page.');
     } finally {
       setIsLoading(false);
     }
@@ -202,6 +204,7 @@ const EmailDashboard: React.FC = () => {
 
   const handleAccountConnect = async (accountType: string) => {
     console.log(`🔗 Attempting to connect ${accountType} account...`);
+    setConnectionError('');
     
     if (accountType === 'gmail') {
       try {
@@ -236,12 +239,13 @@ const EmailDashboard: React.FC = () => {
           errorMessage = 'Popup blocked. Please allow popups for this site and try again.';
         } else if (error.message?.includes('access_denied')) {
           errorMessage = 'Access denied. Please grant permission to access your Gmail account.';
+        } else if (error.message?.includes('popup_closed')) {
+          errorMessage = 'Authentication canceled. The sign-in popup was closed before completion. Please try again and complete the sign-in process.';
         } else if (error.message) {
           errorMessage = error.message;
         }
         
-        // You could show this error in the UI
-        alert(`Gmail Connection Failed: ${errorMessage}`);
+        setConnectionError(errorMessage);
       }
     } else if (accountType === 'outlook') {
       try {
@@ -278,8 +282,7 @@ const EmailDashboard: React.FC = () => {
           errorMessage = error.message;
         }
         
-        // You could show this error in the UI
-        alert(`Outlook Connection Failed: ${errorMessage}`);
+        setConnectionError(errorMessage);
       }
     }
     // Other account types will be implemented in future steps
@@ -313,6 +316,7 @@ const EmailDashboard: React.FC = () => {
       console.log('✅ Account disconnected successfully');
     } catch (error) {
       console.error('❌ Failed to disconnect account:', error);
+      setConnectionError('Failed to disconnect account. Please try again.');
     }
   };
 
@@ -321,6 +325,7 @@ const EmailDashboard: React.FC = () => {
     if (!account) return;
 
     console.log(`🔄 Refreshing ${account.type} account...`);
+    setConnectionError('');
 
     // Update account status to syncing
     setConnectedAccounts(prev => prev.map(acc => 
@@ -384,6 +389,7 @@ const EmailDashboard: React.FC = () => {
           errorMessage: 'Failed to refresh account. Please try reconnecting.'
         } : acc
       ));
+      setConnectionError('Failed to refresh account. Please try reconnecting.');
     }
   };
 
@@ -442,6 +448,19 @@ const EmailDashboard: React.FC = () => {
               Connect and manage your email accounts with AI-powered meeting detection
             </p>
           </div>
+
+          {/* Connection Error Display */}
+          {connectionError && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-400 mr-3" />
+                <div>
+                  <p className="text-red-300 font-semibold">Connection Error</p>
+                  <p className="text-red-200 text-sm">{connectionError}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid lg:grid-cols-4 gap-8">
             {/* Sidebar - Account Management */}

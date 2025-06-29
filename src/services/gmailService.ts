@@ -530,9 +530,9 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           hint: localStorage.getItem('gmail_user_email') || undefined
         });
 
-        // Set a longer timeout for interactive auth (60 seconds)
+        // Set a longer timeout for interactive auth (120 seconds)
         this.authTimeoutId = window.setTimeout(() => {
-          console.log('Interactive auth timeout after 60 seconds');
+          console.log('Interactive auth timeout after 120 seconds');
           this.authInProgress = false;
           if (this.popupCheckInterval) {
             clearInterval(this.popupCheckInterval);
@@ -543,7 +543,7 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           }
           window.removeEventListener('message', messageListener);
           resolve(false);
-        }, 60000);
+        }, 120000); // Increased from 60s to 120s
       } catch (error) {
         console.error('Failed to request access token:', error);
         this.authInProgress = false;
