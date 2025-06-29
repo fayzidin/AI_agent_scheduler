@@ -15,6 +15,12 @@ class GoogleCalendarService {
   private gapi: any = null;
   private tokenClient: any = null;
   private currentUser: any = null;
+  private redirectUri: string;
+
+  constructor() {
+    // Set redirect URI for OAuth flow
+    this.redirectUri = `${window.location.origin}/google-auth-fix.html`;
+  }
 
   async initialize(): Promise<boolean> {
     if (!isGoogleConfigured()) {
@@ -73,7 +79,8 @@ class GoogleCalendarService {
         },
         // Add these options to help with COOP issues
         ux_mode: 'popup',
-        select_account: true
+        select_account: true,
+        hint: localStorage.getItem('google_user_email') || undefined
       });
 
       this.isInitialized = true;
@@ -116,6 +123,11 @@ class GoogleCalendarService {
 
   private handleTokenResponse(tokenResponse: any) {
     try {
+      console.log('Google Calendar token response received:', { 
+        hasToken: !!tokenResponse.access_token,
+        hasError: !!tokenResponse.error 
+      });
+      
       if (tokenResponse.error) {
         console.error('Token acquisition failed:', tokenResponse.error);
         
@@ -158,11 +170,31 @@ class GoogleCalendarService {
       // Store token info for session persistence
       this.storeTokenInfo(tokenResponse);
       
+      // Store user email for future hint
+      this.getUserEmail().then(email => {
+        if (email) {
+          localStorage.setItem('google_user_email', email);
+        }
+      }).catch(err => {
+        console.warn('Could not get user email:', err);
+      });
+      
     } catch (error) {
       console.error('Error in token callback:', error);
       Sentry.captureException(error, {
         tags: { component: 'google-calendar-token-callback' },
       });
+    }
+  }
+
+  private async getUserEmail(): Promise<string | null> {
+    try {
+      await this.gapi.client.load('oauth2', 'v2');
+      const response = await this.gapi.client.oauth2.userinfo.get();
+      return response.result.email || null;
+    } catch (error) {
+      console.error('Failed to get user email:', error);
+      return null;
     }
   }
 
@@ -176,6 +208,7 @@ class GoogleCalendarService {
     
     try {
       localStorage.setItem('google_calendar_token', JSON.stringify(tokenInfo));
+      console.log('Google Calendar token stored successfully');
     } catch (error) {
       console.warn('Failed to store token info:', error);
     }
@@ -221,6 +254,8 @@ class GoogleCalendarService {
 
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
+      script.async = true;
+      script.defer = true;
       script.onload = () => {
         clearTimeout(timeout);
         resolve();
@@ -442,7 +477,8 @@ See GOOGLE_OAUTH_SETUP.md for detailed instructions.
           prompt: 'consent', // Show consent screen for interactive auth
           // Add these options to help with COOP issues
           ux_mode: 'popup',
-          select_account: true
+          select_account: true,
+          hint: localStorage.getItem('google_user_email') || undefined
         });
       } catch (error) {
         console.error('Failed to request access token:', error);

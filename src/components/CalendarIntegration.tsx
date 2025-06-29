@@ -91,7 +91,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
           setTimeout(() => handleCheckAvailability(selectedDate), 1000);
         }
       } else {
-        setConnectionError('Failed to connect to calendar provider');
+        throw new Error('Failed to connect to calendar provider');
       }
     } catch (error: any) {
       console.error('Failed to connect provider:', error);
@@ -637,7 +637,7 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
                   VITE_GOOGLE_CLIENT_ID=your-client-id<br/>
                   VITE_GOOGLE_API_KEY=your-api-key
                 </div>
-                <p className="mt-2">3. Check GOOGLE_CALENDAR_SETUP.md for detailed instructions</p>
+                <p className="mt-2">3. Check GOOGLE_OAUTH_SETUP_UPDATED.md for detailed instructions</p>
               </div>
             </div>
           )}
@@ -892,9 +892,39 @@ const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({ parsedData, o
               <div>
                 <h5 className="text-blue-300 font-semibold">Fallback Mode Active</h5>
                 <p className="text-blue-200 text-sm">
-                  Using mock calendar data for demonstration. Connect real calendar providers for production use.
+                  Using mock calendar data for demonstration. 
+                  Connect real calendar providers for production use.
                 </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Troubleshooting Guide */}
+        {authAttempts > 1 && connectionError && (
+          <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+            <div className="flex items-center mb-2">
+              <Settings className="w-5 h-5 text-blue-400 mr-3" />
+              <h5 className="text-blue-300 font-semibold">Troubleshooting Guide</h5>
+            </div>
+            <div className="text-blue-200 text-sm space-y-2">
+              <p>If you're having trouble connecting to Google Calendar:</p>
+              <ol className="list-decimal list-inside space-y-1 pl-2">
+                <li>Try using a different browser (Chrome or Edge recommended)</li>
+                <li>Check if popups are allowed for this site</li>
+                <li>Try using incognito/private browsing mode</li>
+                <li>Clear your browser cookies and cache</li>
+                <li>Check if your browser has strict privacy settings that might block authentication</li>
+              </ol>
+              <p className="mt-2">
+                <a 
+                  href="/GOOGLE_OAUTH_TROUBLESHOOTING_COOP.md" 
+                  target="_blank" 
+                  className="text-blue-300 underline hover:text-blue-200"
+                >
+                  View detailed troubleshooting guide
+                </a>
+              </p>
             </div>
           </div>
         )}
