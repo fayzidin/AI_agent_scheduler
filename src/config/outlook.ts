@@ -14,7 +14,7 @@ export const getOutlookConfig = (): OutlookConfig => {
 
   return {
     clientId: clientId || '',
-    authority: 'https://login.microsoftonline.com/common',
+    authority: 'https://login.microsoftonline.com/consumers', // Changed from 'common' to 'consumers'
     redirectUri: window.location.origin,
     scopes: [
       'https://graph.microsoft.com/Mail.Read',
