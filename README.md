@@ -2,7 +2,23 @@
 
 AI Meeting Assistant is a powerful tool that transforms your email workflow with AI-powered meeting detection, automatic scheduling, and seamless calendar integration.
 
-![AI Meeting Assistant](https://user-images.githubusercontent.com/12345678/example-screenshot.png)
+<p align="center">
+  <a href="https://github.com/fayzidin/AI_agent_scheduler">
+    <img src="https://user-images.githubusercontent.com/12345678/example-screenshot.png" alt="AI Meeting Assistant" width="600">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/fayzidin/AI_agent_scheduler">
+    <img src="https://img.shields.io/github/stars/fayzidin/AI_agent_scheduler?style=social" alt="GitHub Stars">
+  </a>
+  <a href="https://github.com/fayzidin/AI_agent_scheduler/issues">
+    <img src="https://img.shields.io/github/issues/fayzidin/AI_agent_scheduler" alt="GitHub Issues">
+  </a>
+  <a href="https://github.com/fayzidin/AI_agent_scheduler/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/fayzidin/AI_agent_scheduler" alt="License">
+  </a>
+</p>
 
 ## 🚀 Features
 
@@ -15,6 +31,10 @@ AI Meeting Assistant is a powerful tool that transforms your email workflow with
 - **CRM Integration**: Automatically sync meeting data and contact information to your CRM systems including HubSpot, Salesforce, and Google Sheets for seamless relationship management.
 
 - **Calendar Export**: Generate calendar files (.ics/.vcs) for easy sharing and integration with any calendar system.
+
+## 🎮 Demo
+
+Try the live demo at [https://aima.netlify.app](https://aima.netlify.app)
 
 ## 🔧 Tech Stack
 
@@ -80,8 +100,8 @@ VITE_ENVIRONMENT=development
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/ai-meeting-assistant.git
-   cd ai-meeting-assistant
+   git clone https://github.com/fayzidin/AI_agent_scheduler.git
+   cd AI_agent_scheduler
    ```
 
 2. Install dependencies:
@@ -119,6 +139,8 @@ The application is configured for easy deployment to Netlify:
 4. Add your domain to the authorized JavaScript origins
 5. Add your Google Client ID and API Key to the `.env` file
 
+Detailed instructions can be found in the `GOOGLE_OAUTH_SETUP.md` file.
+
 ### Microsoft API Setup
 
 1. Register an application in the [Azure Portal](https://portal.azure.com/)
@@ -126,6 +148,8 @@ The application is configured for easy deployment to Netlify:
 3. Configure the authentication platform as a Single-page application (SPA)
 4. Add your domain to the redirect URIs
 5. Add your Microsoft Client ID to the `.env` file
+
+Detailed instructions can be found in the `OUTLOOK_OAUTH_SETUP.md` file.
 
 ## 📊 Pricing Model
 
@@ -186,4 +210,24 @@ For questions or support, please email [support@aimeetingassistant.com](mailto:s
 
 ---
 
-Built with ❤️ for productivity professionals
+<p align="center">
+  <a href="https://supabase.com">
+    <img src="/supabase.svg" alt="Supabase" height="30">
+  </a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="https://www.netlify.com">
+    <img src="/netlify.svg" alt="Netlify" height="30">
+  </a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="https://sentry.io">
+    <img src="/sentry.svg" alt="Sentry" height="30">
+  </a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/fayzidin/AI_agent_scheduler">
+    <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Logo.png" alt="GitHub" height="30">
+  </a>
+</p>
+
+<p align="center">
+  Built with ❤️ for productivity professionals
+</p>
