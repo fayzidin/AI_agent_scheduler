@@ -40,6 +40,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [connectionError, setConnectionError] = useState<string>('');
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
+  const [showSimpleInstructions, setShowSimpleInstructions] = useState(false);
 
   const emailProviders: EmailProvider[] = [
     {
@@ -130,12 +131,12 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
 
     setIsConnecting(providerId);
     setConnectionError('');
+    setShowSimpleInstructions(true);
     
     try {
       console.log(`🔗 Connecting to ${provider.name} with ${provider.accessLevel} access...`);
       await onAccountConnect(providerId);
       console.log(`✅ Successfully connected to ${provider.name}!`);
-      onClose(); // Close modal on successful connection
     } catch (error: any) {
       console.error(`❌ Failed to connect to ${provider.name}:`, error);
       
@@ -261,6 +262,24 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
               </div>
             </div>
           </div>
+
+          {/* Simple Connection Instructions */}
+          {showSimpleInstructions && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-6">
+              <div className="flex items-start space-x-3">
+                <Info className="w-5 h-5 text-green-400 mt-0.5" />
+                <div>
+                  <h3 className="text-green-300 font-semibold text-sm">Simple Connection Instructions</h3>
+                  <ol className="list-decimal list-inside space-y-2 text-green-200 text-sm mt-2">
+                    <li><strong>Before connecting:</strong> Make sure you're already signed into your account in another browser tab</li>
+                    <li><strong>When the consent screen appears:</strong> Select your account and click "Continue"</li>
+                    <li><strong>Grant permissions:</strong> Click "Continue" to allow access to your emails</li>
+                    <li><strong>Wait for completion:</strong> The process will finish automatically</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Provider Selection */}
           <div className="space-y-4">
@@ -509,37 +528,37 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ onClose, onAccountCon
                   )}
                 </div>
               </div>
+            </div>
+          )}
+          
+          {/* Detailed troubleshooting guide */}
+          {showTroubleshooting && (
+            <div className="mt-4 p-4 bg-red-500/20 rounded-lg">
+              <h5 className="text-red-300 font-semibold mb-2">Detailed Troubleshooting Guide</h5>
               
-              {/* Detailed troubleshooting guide */}
-              {showTroubleshooting && (
-                <div className="mt-4 p-4 bg-red-500/20 rounded-lg">
-                  <h5 className="text-red-300 font-semibold mb-2">Detailed Troubleshooting Guide</h5>
-                  
-                  <div className="space-y-3 text-red-200 text-sm">
-                    <p><strong>1. Browser Compatibility:</strong> Google's authentication works best with Chrome and Edge. Firefox and Safari may have stricter security settings that can interfere with the authentication popup.</p>
-                    
-                    <p><strong>2. Sign in to Google first:</strong> Before connecting, sign in to your Google account in another tab. This makes the authentication process much faster and more reliable.</p>
-                    
-                    <p><strong>3. Clear browser data:</strong> Go to your browser settings and clear cookies and site data specifically for accounts.google.com.</p>
-                    
-                    <p><strong>4. Disable extensions:</strong> Temporarily disable any privacy or ad-blocking extensions that might interfere with popups or third-party cookies.</p>
-                    
-                    <p><strong>5. Try incognito/private mode:</strong> This can bypass some browser extensions and cached credentials that might be causing issues.</p>
-                    
-                    <p><strong>6. Check for multiple Google accounts:</strong> If you have multiple Google accounts, the selection process in the popup might time out. Try signing out of all accounts except the one you want to use.</p>
-                    
-                    <p><strong>7. Allow third-party cookies:</strong> Make sure your browser allows third-party cookies, at least for accounts.google.com.</p>
-                    
-                    <p><strong>8. Check your internet connection:</strong> A slow or unstable connection can cause the authentication process to time out.</p>
-                  </div>
-                  
-                  <div className="mt-4 p-3 bg-blue-500/20 rounded-lg border border-blue-500/20">
-                    <p className="text-blue-200 text-sm">
-                      <strong>Alternative approach:</strong> If you continue to have issues, try refreshing the page and attempting to connect again. Sometimes the authentication flow works better on a fresh page load.
-                    </p>
-                  </div>
-                </div>
-              )}
+              <div className="space-y-3 text-red-200 text-sm">
+                <p><strong>1. Browser Compatibility:</strong> Google's authentication works best with Chrome and Edge. Firefox and Safari may have stricter security settings that can interfere with the authentication popup.</p>
+                
+                <p><strong>2. Sign in to Google first:</strong> Before connecting, sign in to your Google account in another tab. This makes the authentication process much faster and more reliable.</p>
+                
+                <p><strong>3. Clear browser data:</strong> Go to your browser settings and clear cookies and site data specifically for accounts.google.com.</p>
+                
+                <p><strong>4. Disable extensions:</strong> Temporarily disable any privacy or ad-blocking extensions that might interfere with popups or third-party cookies.</p>
+                
+                <p><strong>5. Try incognito/private mode:</strong> This can bypass some browser extensions and cached credentials that might be causing issues.</p>
+                
+                <p><strong>6. Check for multiple Google accounts:</strong> If you have multiple Google accounts, the selection process in the popup might time out. Try signing out of all accounts except the one you want to use.</p>
+                
+                <p><strong>7. Allow third-party cookies:</strong> Make sure your browser allows third-party cookies, at least for accounts.google.com.</p>
+                
+                <p><strong>8. Check your internet connection:</strong> A slow or unstable connection can cause the authentication process to time out.</p>
+              </div>
+              
+              <div className="mt-4 p-3 bg-blue-500/20 rounded-lg border border-blue-500/20">
+                <p className="text-blue-200 text-sm">
+                  <strong>Alternative approach:</strong> If you continue to have issues, try refreshing the page and attempting to connect again. Sometimes the authentication flow works better on a fresh page load.
+                </p>
+              </div>
             </div>
           )}
 

@@ -18,8 +18,6 @@ class GmailService {
   private redirectUri: string;
   private authInProgress: boolean = false;
   private authTimeoutId: number | null = null;
-  private popupWindow: Window | null = null;
-  private popupCheckInterval: number | null = null;
 
   constructor() {
     // Set redirect URI for OAuth flow
@@ -75,11 +73,10 @@ class GmailService {
         });
       });
 
-      // Initialize Google Identity Services token client with improved configuration
+      // Initialize Google Identity Services token client with simplified configuration
       this.tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
         scope: config.scopes.join(' '),
-        prompt: 'consent',
         callback: (tokenResponse: any) => {
           this.handleTokenResponse(tokenResponse);
         },
@@ -90,19 +87,11 @@ class GmailService {
             clearTimeout(this.authTimeoutId);
             this.authTimeoutId = null;
           }
-          if (this.popupCheckInterval) {
-            clearInterval(this.popupCheckInterval);
-            this.popupCheckInterval = null;
-          }
           Sentry.captureException(new Error(`Gmail OAuth error: ${JSON.stringify(error)}`), {
             tags: { component: 'gmail-oauth-error' },
             extra: { error, currentOrigin: window.location.origin },
           });
-        },
-        // Add these options to help with COOP issues
-        ux_mode: 'popup',
-        select_account: true,
-        hint: localStorage.getItem('gmail_user_email') || undefined
+        }
       });
 
       this.isInitialized = true;
@@ -197,10 +186,6 @@ class GmailService {
       if (this.authTimeoutId) {
         clearTimeout(this.authTimeoutId);
         this.authTimeoutId = null;
-      }
-      if (this.popupCheckInterval) {
-        clearInterval(this.popupCheckInterval);
-        this.popupCheckInterval = null;
       }
 
       if (tokenResponse.error) {
@@ -329,99 +314,17 @@ class GmailService {
       return true;
     }
 
-    // Try silent authentication first
-    console.log('🤫 Attempting silent authentication...');
-    const silentSuccess = await this.attemptSilentAuth();
-    if (silentSuccess) {
-      return true;
-    }
-
-    // If silent auth fails, fall back to interactive auth
-    console.log('👤 Attempting interactive authentication...');
-    return this.attemptInteractiveAuth();
-  }
-
-  private async attemptSilentAuth(): Promise<boolean> {
+    // Use a simpler approach - just request token with consent
     return new Promise((resolve) => {
       try {
         if (!this.tokenClient) {
-          console.log('Token client not initialized for silent auth');
+          console.error('Token client not initialized');
           resolve(false);
           return;
         }
 
-        console.log('Attempting silent Gmail authentication...');
-
-        // Prevent multiple auth attempts
-        if (this.authInProgress) {
-          console.log('Authentication already in progress');
-          resolve(false);
-          return;
-        }
-        this.authInProgress = true;
-
-        // Store the original callback
-        const originalCallback = this.tokenClient.callback;
+        console.log('🔑 Requesting Gmail access token...');
         
-        // Set up one-time callback for this request
-        this.tokenClient.callback = (tokenResponse: any) => {
-          try {
-            // Call the original handler
-            this.handleTokenResponse(tokenResponse);
-            
-            // Resolve based on success/failure
-            if (tokenResponse.error) {
-              console.log('Silent auth failed:', tokenResponse.error);
-              resolve(false);
-            } else {
-              console.log('Silent auth successful!');
-              resolve(true);
-            }
-            
-            // Restore original callback
-            this.tokenClient.callback = originalCallback;
-          } catch (error) {
-            console.error('Error in silent auth callback:', error);
-            this.tokenClient.callback = originalCallback;
-            this.authInProgress = false;
-            resolve(false);
-          }
-        };
-
-        // Request access token silently (no user interaction)
-        this.tokenClient.requestAccessToken({ 
-          prompt: 'none' // This is the key - no user prompt
-        });
-
-        // Set a timeout for silent auth
-        this.authTimeoutId = window.setTimeout(() => {
-          if (this.tokenClient.callback !== originalCallback) {
-            console.log('Silent auth timeout');
-            this.tokenClient.callback = originalCallback;
-            this.authInProgress = false;
-            resolve(false);
-          }
-        }, 5000);
-
-      } catch (error) {
-        console.error('Silent auth attempt failed:', error);
-        this.authInProgress = false;
-        resolve(false);
-      }
-    });
-  }
-
-  private async attemptInteractiveAuth(): Promise<boolean> {
-    return new Promise((resolve) => {
-      try {
-        if (!this.tokenClient) {
-          console.error('Token client not initialized for interactive auth');
-          resolve(false);
-          return;
-        }
-
-        console.log('Attempting interactive Gmail authentication...');
-
         // Prevent multiple auth attempts
         if (this.authInProgress) {
           console.log('Authentication already in progress');
@@ -441,109 +344,34 @@ class GmailService {
             
             // Resolve the promise based on success/failure
             if (tokenResponse.error) {
-              console.error('Interactive auth failed:', tokenResponse.error);
-              
-              // Provide helpful error messages
-              if (tokenResponse.error === 'redirect_uri_mismatch') {
-                console.error(`
-🚨 OAuth Configuration Error:
-
-The current domain (${window.location.origin}) is not authorized in your Google Cloud Console.
-
-To fix this:
-1. Go to https://console.cloud.google.com/
-2. Navigate to APIs & Services → Credentials
-3. Edit your OAuth 2.0 Client ID
-4. Add this URL to "Authorized JavaScript origins":
-   ${window.location.origin}
-5. Save and wait 5-10 minutes for changes to propagate
-
-See GOOGLE_OAUTH_SETUP.md for detailed instructions.
-                `);
-              }
-              
+              console.error('Auth failed:', tokenResponse.error);
               resolve(false);
             } else {
-              console.log('Interactive auth successful!');
+              console.log('Auth successful!');
               resolve(true);
             }
             
             // Restore original callback
             this.tokenClient.callback = originalCallback;
           } catch (error) {
-            console.error('Error in interactive auth callback:', error);
+            console.error('Error in auth callback:', error);
             this.tokenClient.callback = originalCallback;
             this.authInProgress = false;
             resolve(false);
           }
         };
 
-        // Add message listener for the redirect page
-        const messageListener = (event: MessageEvent) => {
-          if (event.data === 'auth-complete') {
-            console.log('Received auth-complete message from redirect page');
-            window.removeEventListener('message', messageListener);
-          }
-        };
-        window.addEventListener('message', messageListener);
-
-        // Open a popup window manually to give more time for authentication
-        const width = 500;
-        const height = 600;
-        const left = window.screenX + (window.outerWidth - width) / 2;
-        const top = window.screenY + (window.outerHeight - height) / 2;
-        
-        // Create a popup window first
-        this.popupWindow = window.open(
-          'about:blank',
-          'gmail-auth-popup',
-          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
-        );
-        
-        if (!this.popupWindow) {
-          console.error('Failed to open popup window - likely blocked by browser');
-          alert('Popup blocked! Please allow popups for this site and try again.');
-          this.authInProgress = false;
-          window.removeEventListener('message', messageListener);
-          resolve(false);
-          return;
-        }
-        
-        // Check if popup is closed prematurely
-        this.popupCheckInterval = window.setInterval(() => {
-          if (this.popupWindow && this.popupWindow.closed) {
-            console.log('Auth popup closed by user');
-            clearInterval(this.popupCheckInterval!);
-            this.popupCheckInterval = null;
-            this.authInProgress = false;
-            window.removeEventListener('message', messageListener);
-            resolve(false);
-          }
-        }, 1000);
-
-        // Request access token with user interaction (popup)
+        // Request access token with consent
         this.tokenClient.requestAccessToken({ 
-          prompt: 'consent', // Show consent screen for interactive auth
-          // Add these options to help with COOP issues
-          ux_mode: 'popup',
-          select_account: true,
-          hint: localStorage.getItem('gmail_user_email') || undefined
+          prompt: 'consent'
         });
 
-        // Set a longer timeout for interactive auth (120 seconds)
+        // Set a timeout for auth (2 minutes)
         this.authTimeoutId = window.setTimeout(() => {
-          console.log('Interactive auth timeout after 120 seconds');
+          console.log('Auth timeout after 2 minutes');
           this.authInProgress = false;
-          if (this.popupCheckInterval) {
-            clearInterval(this.popupCheckInterval);
-            this.popupCheckInterval = null;
-          }
-          if (this.popupWindow && !this.popupWindow.closed) {
-            this.popupWindow.close();
-          }
-          window.removeEventListener('message', messageListener);
           resolve(false);
-        }, 120000); // Increased from 60s to 120s
+        }, 120000);
       } catch (error) {
         console.error('Failed to request access token:', error);
         this.authInProgress = false;

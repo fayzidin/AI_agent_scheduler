@@ -24,6 +24,7 @@ const GmailRoom: React.FC = () => {
   const [showCalendarIntegration, setShowCalendarIntegration] = useState(false);
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
   const [authAttempts, setAuthAttempts] = useState(0);
+  const [showSimpleInstructions, setShowSimpleInstructions] = useState(false);
 
   useEffect(() => {
     checkConnection();
@@ -67,6 +68,7 @@ const GmailRoom: React.FC = () => {
     setIsConnecting(true);
     setConnectionError('');
     setAuthAttempts(prev => prev + 1);
+    setShowSimpleInstructions(true);
     
     try {
       console.log('🔗 Starting Gmail connection process...');
@@ -331,11 +333,27 @@ const GmailRoom: React.FC = () => {
                 ) : (
                   <Mail className="w-5 h-5" />
                 )}
-                <span>{isConnecting ? 'Connecting...' : 'Connect Real Gmail'}</span>
+                <span>{isConnecting ? 'Connecting...' : 'Connect Gmail'}</span>
               </button>
             )}
           </div>
         </div>
+
+        {/* Simple Instructions */}
+        {showSimpleInstructions && !isConnected && (
+          <div className="mb-6 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+            <div className="flex items-center mb-3">
+              <Info className="w-5 h-5 text-blue-400 mr-3" />
+              <h5 className="text-blue-300 font-semibold">Simple Connection Instructions</h5>
+            </div>
+            <ol className="list-decimal list-inside space-y-2 text-blue-200 text-sm">
+              <li><strong>Before connecting:</strong> Make sure you're already signed into your Google account in another browser tab</li>
+              <li><strong>When the consent screen appears:</strong> Select your Google account and click "Continue"</li>
+              <li><strong>Grant permissions:</strong> Click "Continue" to allow access to your Gmail</li>
+              <li><strong>Wait for completion:</strong> The process will finish automatically</li>
+            </ol>
+          </div>
+        )}
 
         {/* API Configuration Status */}
         <div className="mb-6">
@@ -449,37 +467,6 @@ const GmailRoom: React.FC = () => {
               </div>
             </div>
             
-            {/* Detailed troubleshooting guide */}
-            {showTroubleshooting && (
-              <div className="mt-4 p-4 bg-red-500/20 rounded-lg">
-                <h5 className="text-red-300 font-semibold mb-2">Detailed Troubleshooting Guide</h5>
-                
-                <div className="space-y-3 text-red-200 text-sm">
-                  <p><strong>1. Browser Compatibility:</strong> Google's authentication works best with Chrome and Edge. Firefox and Safari may have stricter security settings that can interfere with the authentication popup.</p>
-                  
-                  <p><strong>2. Sign in to Google first:</strong> Before connecting, sign in to your Google account in another tab. This makes the authentication process much faster and more reliable.</p>
-                  
-                  <p><strong>3. Clear browser data:</strong> Go to your browser settings and clear cookies and site data specifically for accounts.google.com.</p>
-                  
-                  <p><strong>4. Disable extensions:</strong> Temporarily disable any privacy or ad-blocking extensions that might interfere with popups or third-party cookies.</p>
-                  
-                  <p><strong>5. Try incognito/private mode:</strong> This can bypass some browser extensions and cached credentials that might be causing issues.</p>
-                  
-                  <p><strong>6. Check for multiple Google accounts:</strong> If you have multiple Google accounts, the selection process in the popup might time out. Try signing out of all accounts except the one you want to use.</p>
-                  
-                  <p><strong>7. Allow third-party cookies:</strong> Make sure your browser allows third-party cookies, at least for accounts.google.com.</p>
-                  
-                  <p><strong>8. Check your internet connection:</strong> A slow or unstable connection can cause the authentication process to time out.</p>
-                </div>
-                
-                <div className="mt-4 p-3 bg-blue-500/20 rounded-lg border border-blue-500/20">
-                  <p className="text-blue-200 text-sm">
-                    <strong>Alternative approach:</strong> If you continue to have issues, try refreshing the page and attempting to connect again. Sometimes the authentication flow works better on a fresh page load.
-                  </p>
-                </div>
-              </div>
-            )}
-            
             {/* Retry button for authentication errors */}
             {(connectionError.includes('authentication') || 
               connectionError.includes('popup') || 
@@ -494,6 +481,37 @@ const GmailRoom: React.FC = () => {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Detailed troubleshooting guide */}
+        {showTroubleshooting && (
+          <div className="mt-4 p-4 bg-red-500/20 rounded-lg">
+            <h5 className="text-red-300 font-semibold mb-2">Detailed Troubleshooting Guide</h5>
+            
+            <div className="space-y-3 text-red-200 text-sm">
+              <p><strong>1. Browser Compatibility:</strong> Google's authentication works best with Chrome and Edge. Firefox and Safari may have stricter security settings that can interfere with the authentication popup.</p>
+              
+              <p><strong>2. Sign in to Google first:</strong> Before connecting, sign in to your Google account in another tab. This makes the authentication process much faster and more reliable.</p>
+              
+              <p><strong>3. Clear browser data:</strong> Go to your browser settings and clear cookies and site data specifically for accounts.google.com.</p>
+              
+              <p><strong>4. Disable extensions:</strong> Temporarily disable any privacy or ad-blocking extensions that might interfere with popups or third-party cookies.</p>
+              
+              <p><strong>5. Try incognito/private mode:</strong> This can bypass some browser extensions and cached credentials that might be causing issues.</p>
+              
+              <p><strong>6. Check for multiple Google accounts:</strong> If you have multiple Google accounts, the selection process in the popup might time out. Try signing out of all accounts except the one you want to use.</p>
+              
+              <p><strong>7. Allow third-party cookies:</strong> Make sure your browser allows third-party cookies, at least for accounts.google.com.</p>
+              
+              <p><strong>8. Check your internet connection:</strong> A slow or unstable connection can cause the authentication process to time out.</p>
+            </div>
+            
+            <div className="mt-4 p-3 bg-blue-500/20 rounded-lg border border-blue-500/20">
+              <p className="text-blue-200 text-sm">
+                <strong>Alternative approach:</strong> If you continue to have issues, try refreshing the page and attempting to connect again. Sometimes the authentication flow works better on a fresh page load.
+              </p>
+            </div>
           </div>
         )}
 
@@ -839,7 +857,7 @@ const GmailRoom: React.FC = () => {
                 <h5 className="text-green-300 font-semibold mb-2">Step-by-Step Guide</h5>
                 <ol className="list-decimal list-inside space-y-2 text-green-200 text-sm">
                   <li>Open a new tab and sign in to your Google account</li>
-                  <li>Return to this tab and click "Connect Real Gmail"</li>
+                  <li>Return to this tab and click "Connect Gmail"</li>
                   <li>When the popup appears, select your account immediately</li>
                   <li>Grant the requested permissions</li>
                   <li>Wait for the popup to close automatically</li>
