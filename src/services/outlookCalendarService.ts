@@ -26,6 +26,12 @@ class OutlookCalendarService {
       
       const config = getOutlookConfig();
       
+      // Check if MSAL is available
+      if (!window.msal) {
+        console.error('MSAL library not available after loading attempt');
+        throw new Error('Microsoft Authentication Library (MSAL) not available');
+      }
+
       // Initialize MSAL instance
       const msalConfig = {
         auth: {
@@ -38,12 +44,6 @@ class OutlookCalendarService {
           storeAuthStateInCookie: false,
         }
       };
-
-      // Check if MSAL is available
-      if (!window.msal) {
-        console.error('MSAL library not available after loading attempt');
-        throw new Error('Microsoft Authentication Library (MSAL) not available');
-      }
 
       this.msalInstance = new window.msal.PublicClientApplication(msalConfig);
       await this.msalInstance.initialize();
@@ -312,7 +312,15 @@ class OutlookCalendarService {
   }
 
   async signOut(): Promise<void> {
+    if (!this.isInitialized) return;
+
     try {
+      Sentry.addBreadcrumb({
+        message: 'Starting Outlook Calendar sign-out',
+        category: 'calendar',
+        level: 'info',
+      });
+
       if (this.msalInstance) {
         const accounts = this.msalInstance.getAllAccounts();
         if (accounts.length > 0) {
@@ -320,20 +328,27 @@ class OutlookCalendarService {
         }
       }
       
+      // Clear stored session
       sessionStorage.removeItem('outlook_calendar_token');
+      
       this.isSignedIn = false;
       this.accessToken = '';
       console.log('Outlook Calendar signed out successfully');
     } catch (error) {
-      console.error('Outlook Calendar sign-out failed:', error);
+      console.error('Outlook sign-out failed:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'outlook-calendar-signout' },
+      });
     }
   }
 
   isConnected(): boolean {
     if (!this.isInitialized) return false;
     
+    // Check if we have a valid access token
     const hasValidToken = this.isSignedIn && this.accessToken;
     
+    // Also check stored session if not currently connected
     if (!hasValidToken) {
       return this.loadStoredToken();
     }

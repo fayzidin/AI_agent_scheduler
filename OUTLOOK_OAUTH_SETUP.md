@@ -2,7 +2,7 @@
 
 ## 🚨 **Current Error Analysis**
 
-If you're getting "Failed to connect to Outlook" errors, it's likely because your Microsoft Azure App Registration isn't properly configured for your development environment.
+If you're getting "You can't sign in here with a personal account" errors, it's because the Microsoft Azure App Registration is configured for organizational accounts only.
 
 ## 🛠️ **Quick Setup Steps**
 
@@ -19,7 +19,7 @@ If you're getting "Failed to connect to Outlook" errors, it's likely because you
 3. **Create a New Registration:**
    - Click **+ New registration**
    - **Name**: AI Meeting Assistant
-   - **Supported account types**: Accounts in any organizational directory and personal Microsoft accounts
+   - **Supported account types**: IMPORTANT - Select "Accounts in any organizational directory and personal Microsoft accounts"
    - **Redirect URI**: Web → `https://aima.netlify.app` (and add your development URL)
    - Click **Register**
 
@@ -91,13 +91,14 @@ VITE_OUTLOOK_CLIENT_ID=your-microsoft-client-id
    - Go to Email Dashboard
    - Click "Add Account" → "Microsoft Outlook"
    - Click "Connect"
-   - Should now work without errors
+   - Should now work with personal accounts
 
 ## 🚨 **Common Issues & Solutions**
 
-### **"This app isn't verified"**
-- This is normal for development apps
-- Click "Advanced" → "Continue to [App Name]"
+### **"You can't sign in here with a personal account"**
+- Make sure you selected "Accounts in any organizational directory and personal Microsoft accounts" during app registration
+- Check that your authority is set to "consumers" in the code
+- Try creating a new app registration with the correct settings
 
 ### **"Access blocked"**
 - Check authorized redirect URIs are correct
@@ -113,19 +114,13 @@ VITE_OUTLOOK_CLIENT_ID=your-microsoft-client-id
 - Allow popups for this site
 - Try again after allowing popups
 
-### **"Failed to load Microsoft Authentication Library"**
-- Refresh the page
-- Check your internet connection
-- Disable content blockers or ad blockers
-- Try a different browser
-- Clear browser cache and cookies
-
 ## 📋 **Verification Checklist**
 
-- [ ] Azure App registration created
+- [ ] Azure App registration created with personal account support
 - [ ] Microsoft Graph API permissions added
 - [ ] Redirect URIs configured correctly
 - [ ] Client ID copied to environment variables
+- [ ] Authority set to "consumers" in code
 - [ ] Browser cache cleared
 - [ ] Development server restarted
 
@@ -164,4 +159,4 @@ If you're still getting errors:
 
 ---
 
-**🎉 After following these steps, your Outlook integration should work seamlessly!**
+**🎉 After following these steps, your Outlook integration should work with personal accounts!**
